@@ -55,7 +55,8 @@ def test_regex_single_digit(series_type):
     regex_data = dist.serialize()
     new_dist = RegexModel(regex_data)
     check_regex_dist(new_dist)
-
+    print(-len(series)*3*np.log(10), dist.log_likelihood(series))
+    assert np.isclose(-len(series)*3*np.log(10), dist.log_likelihood(series))
 
 # @mark.parametrize("series_type", [pd.Series, pl.Series])
 # def test_regex_unique(series_type):

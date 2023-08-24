@@ -27,12 +27,11 @@ class Link():
     def log_likelihood(self, value: str) -> float:
         if self.destination is None:
             if len(value) == 0:
-                return 1
+                return 0
             else:
                 return UNVIABLE_REGEX
         if self.direction == Dir.BOTH:
             center_nodes = self.get_main_branch()
-            # print(center_nodes)
             weights = np.array([node.tot_weight(Dir.LEFT) for node in center_nodes])
             prob = weights/np.sum(weights)
             log_likes = np.array([node.log_likelihood(value, direction=self.direction)
@@ -181,18 +180,15 @@ class Node():
             return UNVIABLE_REGEX
         all_probs = []
         all_log_prob = []
-        # print(self.regex)
         for res in self.regex.fit_value(value, direction):
             if direction == Dir.BOTH:
                 pre_str, prob, post_str = res
-                # print(pre_str, prob, post_str)
                 links_left = [link for link in self.all_links if link.direction == Dir.LEFT]
                 if len(links_left) == 0:
                     return UNVIABLE_REGEX
                 links_right = [link for link in self.all_links if link.direction == Dir.RIGHT]
                 loglike_left = _sum_links_loglike(pre_str, links_left)
                 loglike_right = _sum_links_loglike(post_str, links_right)
-                # print("xxx", loglike_left, loglike_right)
                 all_log_prob.append(loglike_left + loglike_right)
                 all_probs.append(prob)
             else:
@@ -202,9 +198,7 @@ class Node():
                 all_probs.append(prob)
                 all_log_prob.append(log_like)
         if len(all_probs) == 0:
-            # print("no_prob", self.regex, len(value)*LOG_LIKE_PER_CHAR)
             return UNVIABLE_REGEX
-        # print(self.regex, sum_prob_log(all_probs, all_log_prob))
         return sum_prob_log(all_probs, all_log_prob)
 
     @classmethod

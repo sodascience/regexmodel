@@ -15,5 +15,5 @@ def sum_prob_log(probs, log_likes):
     log_likes = np.array(log_likes)
     probs = np.array(probs)
     max_log = np.max(log_likes)
-    rel_probs = np.sum(np.exp(log_likes-max_log))
+    rel_probs = np.exp(log_likes-max_log)
     return np.log(np.sum(probs*rel_probs)) + max_log

@@ -98,7 +98,7 @@ class MultiRegex(BaseRegex):
     @cached_property
     def center_regexes(self):
         return {
-            cur_len: re.compile(r"$" + self._base_regex + r"{" + str(cur_len) + r"}")
+            cur_len: re.compile(r"^" + self._base_regex + r"{" + str(cur_len) + r"}")
             for cur_len in range(self.min_len, self.max_len+1)
         }
 
@@ -112,21 +112,22 @@ class MultiRegex(BaseRegex):
     def fit_value_center(self, value: str):
         for i_val in range(len(value)):
             for i_len in range(self.min_len, self.max_len+1):
-                res = self.center_regex[i_len].match(value[i_val:])
+                res = self.center_regexes[i_len].match(value[i_val:])
                 if res is not None:
-                    yield (value[:i_val], 1/len(self.center_regexes), value[i_val+i_len:])
+                    yield (value[:i_val], (self.n_possible)**-i_len, value[i_val+i_len:])
 
     def fit_value_left(self, value: str):
         for i_len in range(self.min_len, self.max_len+1):
             res = self.center_regexes.match(value[::-1])
             if res is not None:
-                yield (value[:-i_len], 1/len(self.center_regexes))
+                yield (value[:-i_len], (self.n_possible)**-i_len)
 
     def fit_value_right(self, value: str):
         for i_len in range(self.min_len, self.max_len+1):
-            res = self.center_regexes.match(value)
+            regex = self.center_regexes[i_len]
+            res = regex.match(value)
             if res is not None:
-                yield (value[i_len:], 1/len(self.center_regexes))
+                yield (value[i_len:], (self.n_possible)**-i_len)
 
     @property
     def regex(self):

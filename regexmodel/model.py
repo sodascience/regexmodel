@@ -20,7 +20,6 @@ def fit_best_regex(series, score_thres, direction=Dir.RIGHT):
     for regex_class in [UpperRegex, LowerRegex, DigitRegex, LiteralRegex]:
         regex_inst, score, new_series = regex_class.fit(
             series, score_thres=score_thres, direction=direction)
-        # print(regex_inst, score, new_series.drop_nulls()[:5].to_numpy())
         if score > best_regex["score"]:
             best_regex = {
                 "score": score,
@@ -145,7 +144,6 @@ def fit_series(series: pl.Series, score_thres, direction=Dir.BOTH) -> list[Link]
                     nodes[i_cur].main_link.count += cur_count
             else:
                 for i_cur in range(i_start, i_end-1):  # Note: -1 or not?
-                    # print(n_center_regex, i_cur)
                     nodes[i_cur].main_link.count += cur_count
             left_series[i_start].append(start_elem)
             right_series[i_end-1].append(end_elem)
@@ -226,7 +224,10 @@ class RegexModel():
     def n_param(self):
         return np.sum([link.n_param for link in self.root_links])
 
-    def AIC(self, values):
+    def AIC(self, values) -> float:
+        return 2*self.n_param - 2*self.log_likelihood(values)
+
+    def log_likelihood(self, values) -> float:
         tot_log_like = 0
         for val in values:
             log_likes = [link.log_likelihood(val) for link in self.root_links]
@@ -234,7 +235,4 @@ class RegexModel():
             if cur_log_like < UNVIABLE_REGEX/2:
                 cur_log_like = max(len(val), 1)*LOG_LIKE_PER_CHAR
             tot_log_like += cur_log_like
-        return 2*self.n_param - 2*tot_log_like
-
-    # def regex(self) -> str:
-    #
+        return tot_log_like
