@@ -6,19 +6,20 @@ import pandas as pd
 import polars as pl
 from pytest import mark, raises
 
-from metasynth.distribution.regex import RegexDistribution, UniqueRegexDistribution
-from metasynth.distribution.regex import LiteralRegex, DigitRegex, Dir
+# from metasynth.distribution.regex import RegexDistribution, UniqueRegexDistribution
+# from metasynth.distribution.regex import LiteralRegex, DigitRegex, Dir
 # from metasynth.distribution.regex.element import SingleRegex,\
     # DigitRegex, AlphaNumericRegex, LettersRegex, LowercaseRegex, UppercaseRegex,\
     # AnyRegex
+from regexmodel import RegexModel
+from regexmodel.regexclass import LiteralRegex, DigitRegex
+from regexmodel.util import Dir
 
 
 @mark.parametrize("series_type", [pd.Series, pl.Series])
 def test_regex_single_digit(series_type):
     series = series_type(["R123", "R837", "R354", "R456", "R578", "R699"])
-    dist = RegexDistribution.fit(series)
-    dist_unique = UniqueRegexDistribution.fit(series)
-    assert dist.information_criterion(series) < dist_unique.information_criterion(series)
+    dist = RegexModel.fit(series)
 
     def check_regex_dist(dist):
         assert len(dist.root_links) == 1
@@ -51,8 +52,8 @@ def test_regex_single_digit(series_type):
 
     check_regex_dist(dist)
 
-    regex_data = dist.to_dict()["parameters"]
-    new_dist = RegexDistribution(**regex_data)
+    regex_data = dist.serialize()
+    new_dist = RegexModel(regex_data)
     check_regex_dist(new_dist)
 
 
