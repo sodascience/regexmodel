@@ -101,14 +101,14 @@ def extract_elements(cur_series: pl.Series,
                      i_end: int,
                      direction: Dir) -> tuple[Optional[pl.Series], Optional[pl.Series]]:
     if direction == Dir.BOTH:
-        start_elem = cur_series.str.extract(r"^(.*?)" + regex + r".*")
-        end_elem = cur_series.str.extract(r"^.*" + regex + r"(.*?)$")
+        start_elem = cur_series.str.extract(r"^([\S\s]*?)" + regex + r".*")
+        end_elem = cur_series.str.extract(r"[\S\s]*" + regex + r"([\S\s]*?)$")
     elif direction == Dir.LEFT:
-        start_elem = cur_series.str.extract(r"^(.*?)" + regex + r"$")
+        start_elem = cur_series.str.extract(r"^([\S\s]*?)" + regex + r"$")
         end_elem = None
     elif direction == Dir.RIGHT:
         start_elem = None
-        end_elem = cur_series.str.extract(r"^" + regex + r"(.*?)$")
+        end_elem = cur_series.str.extract(r"^" + regex + r"([\S\s]*?)$")
     return start_elem, end_elem
 
 
@@ -171,6 +171,7 @@ def fit_series(series: pl.Series, score_thres, direction=Dir.BOTH) -> list[Link]
         root_links[-1].count = total_count
         center_regex_list = fit_center_branch(cur_series, score_thres=score_thres,
                                               direction=direction)
+
     n_left_over = cur_series.drop_nulls().len()
     if n_left_over:
         root_links.append(Link(n_left_over, direction=direction))
@@ -228,11 +229,33 @@ class RegexModel():
         return 2*self.n_param - 2*self.log_likelihood(values)
 
     def log_likelihood(self, values) -> float:
-        tot_log_like = 0
+        stats = self.fit_statistics(values)
+        return stats["n_tot_char"]*stats["avg_log_like_per_char"]
+
+    def fit_statistics(self, values) -> dict:
+        res = {
+            "failed": 0,
+            "success": 0,
+            "n_tot_char": 0,
+            "n_char_success": 0,
+            "n_parameters": self.n_param,
+            "avg_log_like_per_char": 0.0,
+            "avg_log_like_pc_success": 0.0,
+        }
         for val in values:
             log_likes = [link.log_likelihood(val) for link in self.root_links]
             cur_log_like = sum_prob_log(self.root_prob, log_likes)
+            res["n_tot_char"] += len(val)
             if cur_log_like < UNVIABLE_REGEX/2:
                 cur_log_like = max(len(val), 1)*LOG_LIKE_PER_CHAR
-            tot_log_like += cur_log_like
-        return tot_log_like
+                res["failed"] += 1
+            else:
+                res["n_char_success"] += len(val)
+                res["avg_log_like_pc_success"] += cur_log_like
+                res["success"] += 1
+            res["avg_log_like_per_char"] += cur_log_like
+        if res["n_char_success"] > 0:
+            res["avg_log_like_pc_success"] /= res["n_char_success"]
+        if res["n_tot_char"] > 0:
+            res["avg_log_like_per_char"] /= res["n_tot_char"]
+        return res

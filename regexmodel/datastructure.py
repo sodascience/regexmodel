@@ -142,8 +142,11 @@ class Node():
         chosen_link = np.random.choice(links, p=weights/np.sum(weights))
         return chosen_link
 
-    def tot_weight(self, direction: Dir):
-        weights = [link.count for link in self.all_links if link.direction == direction]
+    def tot_weight(self, direction: Optional[Dir]):
+        if direction is None:
+            weights = [link.count for link in self.all_links]
+        else:
+            weights = [link.count for link in self.all_links if link.direction == direction]
         return int(np.sum(weights))
 
     def draw(self, direction: Dir = Dir.BOTH) -> str:
@@ -232,10 +235,12 @@ class Node():
 
 
 def _sum_links_loglike(value, links):
+    assert len(links) > 0
     probs = []
     log_likes = []
-    for links in links:
-        log_likes.append(links.log_likelihood(value))
-        probs.append(links.count)
+    for cur_link in links:
+        log_likes.append(cur_link.log_likelihood(value))
+        # assert cur_link.count > 0
+        probs.append(cur_link.count)
     probs = np.array(probs)/np.sum(probs)
     return sum_prob_log(probs, log_likes)

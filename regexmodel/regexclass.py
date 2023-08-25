@@ -59,11 +59,11 @@ class MultiRegex(BaseRegex):
     @classmethod
     def fit(cls, series, score_thres, direction: Dir) -> tuple[MultiRegex, float, pl.Series]:
         if direction == Dir.LEFT:
-            first_elem = series.str.extract(r".*("+cls._base_regex+r"+)$")
-            first_char = first_elem.str.extract(r".*(.)$")
+            first_elem = series.str.extract(r"[\S\s]*("+cls._base_regex+r"+)$")
+            first_char = first_elem.str.extract(r"[\S\s]*([\S\s])$")
         else:
             first_elem = series.str.extract(r"^("+cls._base_regex+r"+).*")
-            first_char = first_elem.str.extract(r"^(.).*")
+            first_char = first_elem.str.extract(r"^([\S\s])[\S\s]*")
         n_unique = len(first_char.drop_nulls().unique())
         score = n_unique/cls.n_possible * (len(series) - first_elem.null_count())/len(series)
         lengths = first_elem.str.lengths().drop_nulls().to_numpy()
@@ -87,11 +87,11 @@ class MultiRegex(BaseRegex):
         max_len = unq_len[i_max_len]
         instance = cls(min_len, max_len)
         if direction == Dir.LEFT:
-            first_elem = series.str.extract(r".*(" + instance.regex + r"})$")
-            new_series = series.str.extract(r"(.*)"+instance.regex+r"$")
+            first_elem = series.str.extract(r"[\S\s]*(" + instance.regex + r"})$")
+            new_series = series.str.extract(r"([\S\s]*)"+instance.regex+r"$")
         else:
-            first_elem = series.str.extract(r"^(" + instance.regex + r"}).*")
-            new_series = series.str.extract(r"^"+instance.regex+r"(.*)")
+            first_elem = series.str.extract(r"^(" + instance.regex + r"})[\S\s]*")
+            new_series = series.str.extract(r"^"+instance.regex+r"([\S\s]*)")
 
         return instance, score, new_series
 
@@ -118,14 +118,13 @@ class MultiRegex(BaseRegex):
 
     def fit_value_left(self, value: str):
         for i_len in range(self.min_len, self.max_len+1):
-            res = self.center_regexes.match(value[::-1])
+            res = self.center_regexes[i_len].match(value[::-1])
             if res is not None:
                 yield (value[:-i_len], (self.n_possible)**-i_len)
 
     def fit_value_right(self, value: str):
         for i_len in range(self.min_len, self.max_len+1):
-            regex = self.center_regexes[i_len]
-            res = regex.match(value)
+            res = self.center_regexes[i_len].match(value)
             if res is not None:
                 yield (value[i_len:], (self.n_possible)**-i_len)
 
@@ -226,11 +225,11 @@ class LiteralRegex(BaseRegex):
     @classmethod
     def fit(cls, series, score_thres, direction: Dir):
         if direction == Dir.LEFT:
-            first_elem = series.str.extract(r".*(.)$")
-            second_elem = series.str.extract(r".*(.).$")
+            first_elem = series.str.extract(r"[\S\s]*([\S\s])$")
+            second_elem = series.str.extract(r"[\S\s]*([\S\s])[\S\s]$")
         else:
-            first_elem = series.str.extract(r"^(.).*")
-            second_elem = series.str.extract(r"^.(.).*")
+            first_elem = series.str.extract(r"^([\S\s])[\S\s]*")
+            second_elem = series.str.extract(r"^[\S\s]([\S\s])[\S\s]*")
         unq_char, counts = np.unique(first_elem.drop_nulls().to_numpy(), return_counts=True)
         thres_char = unq_char[counts/len(series) >= score_thres]
         thres_count = counts[counts/len(series) >= score_thres]
@@ -251,32 +250,32 @@ class LiteralRegex(BaseRegex):
             use_chars = ["X"]
         instance = cls(use_chars)
         if direction == Dir.LEFT:
-            new_series = series.str.extract(r"(.*)" + instance.regex + r"$")
+            new_series = series.str.extract(r"([\S\s]*)" + instance.regex + r"$")
         else:
-            new_series = series.str.extract(r"^" + instance.regex + r"(.*)")
+            new_series = series.str.extract(r"^" + instance.regex + r"([\S\s]*)")
         score = (1/len(use_chars))*(new_series.drop_nulls().len()/len(series))
 
         return instance, score, new_series
 
-    @classmethod
-    def _fit_old(cls, series, score_thres, left=True):
-        if left:
-            first_elem = series.str.extract(r"^(.).*").drop_nulls()
-        else:
-            first_elem = series.str.extract(r".*(.)$").drop_nulls()
+    # @classmethod
+    # def _fit_old(cls, series, score_thres, left=True):
+    #     if left:
+    #         first_elem = series.str.extract(r"^(.).*").drop_nulls()
+    #     else:
+    #         first_elem = series.str.extract(r".*(.)$").drop_nulls()
 
-        unq_char, counts = np.unique(first_elem.to_numpy(), return_counts=True)
-        thres_char = unq_char[counts/len(series) >= score_thres]
-        if len(thres_char) == 0:
-            thres_char = ["X"]
-        instance = cls(thres_char)
-        if left:
-            new_series = series.str.extract(r"^" + instance.regex + r"(.*)")
-        else:
-            new_series = series.str.extract(r"(.*)" + instance.regex + r"$")
-        score = (3/len(thres_char))*(new_series.drop_nulls().len()/len(series))
+    #     unq_char, counts = np.unique(first_elem.to_numpy(), return_counts=True)
+    #     thres_char = unq_char[counts/len(series) >= score_thres]
+    #     if len(thres_char) == 0:
+    #         thres_char = ["X"]
+    #     instance = cls(thres_char)
+    #     if left:
+    #         new_series = series.str.extract(r"^" + instance.regex + r"(.*)")
+    #     else:
+    #         new_series = series.str.extract(r"(.*)" + instance.regex + r"$")
+    #     score = (3/len(thres_char))*(new_series.drop_nulls().len()/len(series))
 
-        return instance, score, new_series
+    #     return instance, score, new_series
 
     def __repr__(self):
         return f"Literal [{''.join(self.literals)}]"

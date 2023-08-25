@@ -10,8 +10,6 @@ class Dir(Enum):
 
 
 def sum_prob_log(probs, log_likes):
-    assert len(probs) > 0
-
     log_likes = np.array(log_likes)
     probs = np.array(probs)
     max_log = np.max(log_likes)
