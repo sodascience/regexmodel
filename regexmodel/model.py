@@ -243,7 +243,7 @@ class RegexModel():
             "success": 0,
             "n_tot_char": 0,
             "n_char_success": 0,
-            "n_parameters": self.n_param,
+            "n_parameters": int(self.n_param),
             "avg_log_like_per_char": 0.0,
             "avg_log_like_pc_success": 0.0,
         }
