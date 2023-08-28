@@ -188,6 +188,7 @@ class RegexModel():
             self.root_links = self.__class__.deserialize(regex_data).root_links
         else:
             self.root_links = regex_data
+        self.check_zero_links()
 
     @classmethod
     def fit(cls, values: Union[Iterable, Sequence], count_thres: int = 3):
@@ -232,6 +233,10 @@ class RegexModel():
         stats = self.fit_statistics(values)
         return stats["n_tot_char"]*stats["avg_log_like_per_char"]
 
+    def check_zero_links(self):
+        for link in self.root_links:
+            link.check_zero_links()
+
     def fit_statistics(self, values) -> dict:
         res = {
             "failed": 0,
@@ -244,6 +249,7 @@ class RegexModel():
         }
         for val in values:
             log_likes = [link.log_likelihood(val) for link in self.root_links]
+            # print(self.root_prob, log_likes)
             cur_log_like = sum_prob_log(self.root_prob, log_likes)
             res["n_tot_char"] += len(val)
             if cur_log_like < UNVIABLE_REGEX/2:

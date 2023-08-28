@@ -24,6 +24,11 @@ class Link():
             return 1
         return self.destination.n_param + 1
 
+    def check_zero_links(self):
+        if self.destination is None:
+            return
+        self.destination.check_zero_links()
+
     def log_likelihood(self, value: str) -> float:
         if self.destination is None:
             if len(value) == 0:
@@ -168,6 +173,12 @@ class Node():
             if right_link is not None:
                 cur_str += right_link.draw()
         return cur_str
+
+    def check_zero_links(self):
+        for link in self.sub_links:
+            assert link.count > 0
+        for link in self.all_links:
+            link.check_zero_links()
 
     @property
     def n_param(self):
