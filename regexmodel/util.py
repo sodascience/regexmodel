@@ -10,6 +10,7 @@ UNVIABLE_REGEX = -1000000
 
 class Dir(Enum):
     """Direction of links."""
+
     LEFT = 1  # Backward direction
     RIGHT = 2  # Forward direction
     BOTH = 3  # Both directions

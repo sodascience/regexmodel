@@ -73,11 +73,11 @@ def generate_sub_regexes(regex_list: list[BaseRegex], direction: Dir
     direction:
         Direction of the main branch.
 
-    Returns:
+    Returns
+    -------
         An iterator that iterates over all possible to fit a string:
         (regex to match the string, start index of the match, end index of the match).
     """
-
     # First compute the average number of characters to be matched per element.
     regex_len = []
     for regex in regex_list:
@@ -303,6 +303,7 @@ class RegexModel():
         - RegexModel: Creates a shallow copy of another regex model.
         - list[dict]: A serialized version of the regex model.
     """
+
     def __init__(self, regex_data: Union[str, list[Link], list[dict], RegexModel]):
         self.root_links: list[Link]
         if isinstance(regex_data, str):
@@ -421,8 +422,8 @@ class RegexModel():
         values:
             Values to get the performance metrics for.
 
-        Returns:
-        --------
+        Returns
+        -------
             Dictionary with different metrics, such as failures/successes/parameters.
         """
         res = {

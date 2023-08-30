@@ -18,6 +18,7 @@ from regexmodel.util import Dir
 
 class BaseRegex(ABC):
     """Base regex element."""
+
     prefac: float = 1
 
     @property
@@ -72,7 +73,7 @@ class BaseRegex(ABC):
 
 
 class MultiRegex(BaseRegex, ABC):
-    """This is a set of regex classes that have multiple repeating elements.
+    """Base class for regex classes that have multiple repeating elements.
 
     Examples: [0-9]{3,4}, [A-Z]{1,2}
 
@@ -217,6 +218,7 @@ class UpperRegex(MultiRegex):
 
 class LowerRegex(MultiRegex):
     """Regex class that produces lower case characters."""
+
     _base_regex = r"[a-z]"
     prefac = 0.25
     n_possible = 26
@@ -227,6 +229,7 @@ class LowerRegex(MultiRegex):
 
 class DigitRegex(MultiRegex):
     """Regex class that produces digits."""
+
     _base_regex = r"[0-9]"
     prefac = 0.5
     n_possible = 10

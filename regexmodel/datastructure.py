@@ -27,6 +27,7 @@ class Link():
     destination:
         Node to where the link points to.
     """
+
     def __init__(self, count: int, direction: Dir, destination: Optional[Node] = None):
         self.count = count
         self.direction = direction
@@ -80,7 +81,7 @@ class Link():
         return self.destination.draw(direction=self.direction)
 
     def draw_main(self) -> str:
-        """Special method for drawing the starting link."""
+        """Draw link using special method for drawing the main branch."""
         center_nodes = self.get_main_branch()
         if len(center_nodes) == 0:
             return ""
@@ -180,6 +181,7 @@ class Node():
     sub_links:
         All other links that originate from this node (any direction).
     """
+
     def __init__(self,
                  regex: Optional[BaseRegex],
                  main_link: Link,
@@ -256,8 +258,7 @@ class Node():
         return cur_param
 
     def log_likelihood(self, value: str, direction: Dir) -> float:
-        """Log likelihood calculation from this node.
-        """
+        """Log likelihood calculation from this node."""
         if self.regex is None:
             return 0
         if len(value) == 0:
