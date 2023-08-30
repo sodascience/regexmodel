@@ -110,9 +110,9 @@ def generate_sub_regexes(regex_list: list[BaseRegex], direction: Dir
         # If the direction is left, then all i_end values must be N-1.
         skip_left = (direction == Dir.LEFT and i_end != len(regex_list))
         # if the direction is right, then all i_start values must be 0.
-        skip_right = (direction == Dir.RIGHT and i_end != 0)
+        skip_right = (direction == Dir.RIGHT and i_start != 0)
 
-        if not skip_left or skip_right:
+        if not (skip_left or skip_right):
             # Build the regex for this selection.
             regex_str = ""
             for i in range(i_start, i_end):
