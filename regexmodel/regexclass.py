@@ -59,7 +59,7 @@ class BaseRegex(ABC):
 
     @classmethod
     @abstractmethod
-    def from_string(cls, string) -> Optional[tuple[BaseRegex, str]]:
+    def from_string(cls, regex_str) -> Optional[tuple[BaseRegex, str]]:
         """Create the regex class from a serialized string.
 
         It will return None if the string does not belong to the regex class.
@@ -71,7 +71,7 @@ class BaseRegex(ABC):
         """Create a regex to be used for extracting it from a structured string."""
 
 
-class MultiRegex(BaseRegex):
+class MultiRegex(BaseRegex, ABC):
     """This is a set of regex classes that have multiple repeating elements.
 
     Examples: [0-9]{3,4}, [A-Z]{1,2}
@@ -146,7 +146,7 @@ class MultiRegex(BaseRegex):
     def fit_value(self, value: str, direction: Dir) -> Iterable:
         if direction == Dir.BOTH:
             return self._fit_value_center(value)
-        elif direction == Dir.LEFT:
+        if direction == Dir.LEFT:
             return self._fit_value_left(value)
         return self._fit_value_right(value)
 
@@ -188,19 +188,25 @@ class MultiRegex(BaseRegex):
         n_draw = np.random.randint(self.min_len, self.max_len+1)
         return "".join(self.draw_once() for _ in range(n_draw))
 
+    @abstractmethod
+    def draw_once(self) -> str:
+        """Draw a single character from the multi regex."""
+
     @classmethod
-    def from_string(cls, string) -> Optional[tuple[MultiRegex, str]]:
+    def from_string(cls, regex_str) -> Optional[tuple[MultiRegex, str]]:
         search_regex = r"^" + re.escape(cls._base_regex) + r"(?>{(\d+),(\d+)})?"
-        res = re.search(search_regex, string)
+        res = re.search(search_regex, regex_str)
         if res is None:
             return None
         if res.groups()[0] is None:
-            return cls(), string[len(cls._base_regex):]
+            return cls(), regex_str[len(cls._base_regex):]
         regex_len = len("".join(res.groups())) + len(cls._base_regex) + 3
-        return cls(*[int(x) for x in res.groups()]), string[regex_len:]
+        return cls(*[int(x) for x in res.groups()]), regex_str[regex_len:]
 
 
 class UpperRegex(MultiRegex):
+    """Regex class that produces upper case characters."""
+
     _base_regex = r"[A-Z]"
     prefac = 0.25
     n_possible = 26
@@ -210,6 +216,7 @@ class UpperRegex(MultiRegex):
 
 
 class LowerRegex(MultiRegex):
+    """Regex class that produces lower case characters."""
     _base_regex = r"[a-z]"
     prefac = 0.25
     n_possible = 26
@@ -219,6 +226,7 @@ class LowerRegex(MultiRegex):
 
 
 class DigitRegex(MultiRegex):
+    """Regex class that produces digits."""
     _base_regex = r"[0-9]"
     prefac = 0.5
     n_possible = 10
@@ -256,7 +264,7 @@ def _check_literal_compatible(unq_char: Optional[str],
             max_bound = round(expected_count+np.sqrt(len(unq_char)*expected_count)+1)
             if char not in add_dict and min_bound > 0:
                 return False
-            elif char not in add_dict:
+            if char not in add_dict:
                 continue
             if add_dict[char] < min_bound or add_dict[char] > max_bound:
                 return False
@@ -282,12 +290,21 @@ def _add_literal_compatible(unq_char: Optional[str],
     return np.array(list(data.keys())), np.array(list(data.values()))
 
 
-def _unescape(string: str) -> str:
+def _unescape(regex_str: str) -> str:
     """Remove slashes that are in the serialized string."""
-    return re.sub(r'\\\\(.)', r'\1', string)
+    return re.sub(r'\\\\(.)', r'\1', regex_str)
 
 
 class LiteralRegex(BaseRegex):
+    """Regex class that generates literals.
+
+    Parameters
+    ----------
+    literals:
+        List of all character that can be created using this regex class.
+        This is not limited to ASCII characters.
+    """
+
     def __init__(self, literals: list[str]):
         self.literals = list(set(literals))
 
@@ -344,8 +361,8 @@ class LiteralRegex(BaseRegex):
         if len(value) == 0:
             return
         if direction == Dir.BOTH:
-            for i_val in range(len(value)):
-                if value[i_val] in self.literals:
+            for i_val, cur_char in enumerate(value):
+                if cur_char in self.literals:
                     yield (value[:i_val], 1/len(self.literals), value[i_val+1:])
         elif direction == Dir.LEFT:
             if value[-1] in self.literals:
@@ -354,40 +371,40 @@ class LiteralRegex(BaseRegex):
             yield (value[1:], 1/len(self.literals))
 
     @classmethod
-    def from_string(cls, string) -> Optional[tuple[LiteralRegex, str]]:
+    def from_string(cls, regex_str) -> Optional[tuple[LiteralRegex, str]]:
         # Find first unescaped ']'
         end_index = None
-        for match in re.finditer(r"\]", string):
+        for match in re.finditer(r"\]", regex_str):
             start = match.span()[0]-2
             if start < 0:
                 continue
-            if string[start:start+3] != r"\\]":
+            if regex_str[start:start+3] != r"\\]":
                 end_index = start+3
                 break
-        if end_index is None or string[0] != r"[":
+        if end_index is None or regex_str[0] != r"[":
             return None
 
-        literals = list(_unescape(string[1:end_index-1]))
-        return cls(literals), string[end_index:]
+        literals = list(_unescape(regex_str[1:end_index-1]))
+        return cls(literals), regex_str[end_index:]
 
 
 # All regex classes available, order matters.
 ALL_REGEX_CLASS: list[type[BaseRegex]] = [UpperRegex, LowerRegex, DigitRegex, LiteralRegex]
 
 
-def regex_list_from_string(string) -> list[BaseRegex]:
+def regex_list_from_string(regex_str) -> list[BaseRegex]:
     """Convert a regex string to a list of regex classes.
 
     Parameters
     ----------
-    string:
+    regex_str:
         String representation of the regex list, e.g. r'[0-9]{3,4}[A-Z]'
 
     Returns
     -------
         List of regex classes represented by the regex string.
     """
-    cur_data = string
+    cur_data = regex_str
     all_regexes = []
     # loop until we have parsed the whole string.
     while len(cur_data) > 0:
@@ -400,7 +417,7 @@ def regex_list_from_string(string) -> list[BaseRegex]:
                 cur_data = res[1]
                 break
         if not found:
-            raise ValueError(f"Invalid regex: '{string}', at '{cur_data}'")
+            raise ValueError(f"Invalid regex: '{regex_str}', at '{cur_data}'")
     return all_regexes
 
 

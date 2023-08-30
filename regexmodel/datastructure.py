@@ -1,3 +1,4 @@
+"""Regex classes such as [0-9], [a-z], etc are defined in this module."""
 from __future__ import annotations
 
 from typing import Optional, Union
@@ -38,11 +39,11 @@ class Link():
             return 1
         return self.destination.n_param + 1
 
-    def _check_zero_links(self):
+    def check_zero_links(self):
         """Debug method."""
         if self.destination is None:
             return
-        self.destination._check_zero_links()
+        self.destination.check_zero_links()
 
     def log_likelihood(self, value: str) -> float:
         """Log likelihood computation over this link.
@@ -56,8 +57,7 @@ class Link():
             # Check whether have reached the end in the expected way.
             if len(value) == 0:
                 return 0
-            else:
-                return UNVIABLE_REGEX
+            return UNVIABLE_REGEX
 
         # If we are using the BOTH direction, we first loop over all starting points.
         if self.direction == Dir.BOTH:
@@ -151,7 +151,7 @@ class Link():
         # Create the main branch.
         weights = param_dict["weights"] + [0]
         regex_list = regex_list_from_string(param_dict["regex"])
-        main_link, node_list = Node.main_branch(regex_list, direction, weights)
+        _main_link, node_list = Node.main_branch(regex_list, direction, weights)
 
         # Add side branches for Dir.LEFT
         for side_branch_dict in param_dict["side_branches_before"]:
@@ -240,12 +240,12 @@ class Node():
                 cur_str += right_link.draw()
         return cur_str
 
-    def _check_zero_links(self):
+    def check_zero_links(self):
         """Debug method."""
         for link in self.sub_links:
             assert link.count > 0
         for link in self.all_links:
-            link._check_zero_links()
+            link.check_zero_links()
 
     @property
     def n_param(self) -> int:
@@ -269,11 +269,15 @@ class Node():
             if direction == Dir.BOTH:
                 pre_str, prob, post_str = res
                 links_left = [link for link in self.all_links if link.direction == Dir.LEFT]
+
+                # Only works if we have links on both sides.
                 if len(links_left) == 0:
                     return UNVIABLE_REGEX
                 links_right = [link for link in self.all_links if link.direction == Dir.RIGHT]
                 loglike_left = _sum_links_loglike(pre_str, links_left)
                 loglike_right = _sum_links_loglike(post_str, links_right)
+
+                # Add log likelihood for both forward and backward probabilities.
                 all_log_prob.append(loglike_left + loglike_right)
                 all_probs.append(prob)
             else:
@@ -290,6 +294,27 @@ class Node():
     def main_branch(cls, regex_list: list[BaseRegex], direction: Dir,
                     weight: Union[int, list[int]] = 0
                     ) -> tuple[Link, list[Node]]:
+        """Create a main branch out of a list of regex classes.
+
+        Parameters
+        ----------
+        regex_list:
+            List of regex classes to create a main branch out of.
+        direction:
+            Direction of the main branch.
+        weight:
+            The weights for the main branch. The length of this should be
+            the length of the regex list + 1. If the weight is an integer,
+            then the weights will be equal to that, except for the last link, which
+            should always be 0.
+
+        Returns
+        -------
+        root_link:
+            Link that points to the new main branch.
+        nodes_list:
+            List of nodes that are interconnected and form the main branch.
+        """
         main_dir = direction if direction != Dir.BOTH else Dir.RIGHT
         nodes = [Node(regex, Link(0, main_dir)) for regex in regex_list]
         if isinstance(weight, int):
@@ -304,10 +329,10 @@ class Node():
             for i_node, node in enumerate(nodes[1:]):
                 node.main_link = Link(weight[i_node+2], Dir.LEFT, nodes[i_node])
             return Link(weight[0], Dir.LEFT, nodes[-1]), nodes
-        else:
-            for i_node, node in enumerate(nodes[:-1]):
-                node.main_link = Link(weight[i_node+1], main_dir, nodes[i_node+1])
-            return Link(weight[0], direction, nodes[0]), nodes
+
+        for i_node, node in enumerate(nodes[:-1]):
+            node.main_link = Link(weight[i_node+1], main_dir, nodes[i_node+1])
+        return Link(weight[0], direction, nodes[0]), nodes
 
     def __str__(self):
         return f"Node <{str(self.regex)}>"
@@ -317,12 +342,12 @@ class Node():
 
 
 def _sum_links_loglike(value, links):
+    """Get the log likelihood for a set of links (with weights)."""
     assert len(links) > 0
     probs = []
     log_likes = []
     for cur_link in links:
         log_likes.append(cur_link.log_likelihood(value))
-        # assert cur_link.count > 0
         probs.append(cur_link.count)
     probs = np.array(probs)/np.sum(probs)
     return sum_prob_log(probs, log_likes)

@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import heapq
 from functools import cached_property
+from typing import Iterator, Optional, Iterable, Sequence, Union
 
 import numpy as np
 import polars as pl
-from typing import Iterator, Optional, Iterable, Sequence, Union
 
 from regexmodel.regexclass import BaseRegex
 from regexmodel.regexclass import MultiRegex, regex_list_from_string, fit_best_regex_class
@@ -49,8 +49,7 @@ def fit_main_branch(series: pl.Series,
                                  direction=direction)
     if direction == Dir.LEFT:
         return regex_list + [result["regex"]]
-    else:
-        return [result["regex"]] + regex_list
+    return [result["regex"]] + regex_list
 
 
 def generate_sub_regexes(regex_list: list[BaseRegex], direction: Dir
@@ -102,7 +101,7 @@ def generate_sub_regexes(regex_list: list[BaseRegex], direction: Dir
         heapq.heappush(heap, (-cur_range, (i, len(regex_list))))
 
     # Keep iterating, until the priority heap is empty.
-    while len(heap):
+    while len(heap) > 0:
         min_cur_range, (i_start, i_end) = heapq.heappop(heap)
         if i_end-1 > i_start:
             min_new_range = min_cur_range + regex_len[i_end-1]
@@ -179,7 +178,10 @@ def extract_elements(cur_series: pl.Series,
     return start_elem, end_elem
 
 
-def fit_series(series: pl.Series, score_thres, direction=Dir.BOTH) -> list[Link]:
+def fit_series(  # pylint: disable=too-many-branches
+        series: pl.Series,
+        score_thres: float,
+        direction: Dir = Dir.BOTH) -> list[Link]:
     """Fit the regex model to a series of structured strings.
 
     It does so in a greedy and recursive way. It first generates a main branch,
@@ -302,15 +304,24 @@ class RegexModel():
         - list[dict]: A serialized version of the regex model.
     """
     def __init__(self, regex_data: Union[str, list[Link], list[dict], RegexModel]):
+        self.root_links: list[Link]
         if isinstance(regex_data, str):
             self.root_links = self.__class__.from_regex(regex_data).root_links
         elif isinstance(regex_data, RegexModel):
             self.root_links = regex_data.root_links
-        elif not (len(regex_data) > 0 and isinstance(regex_data[0], Link)):
-            self.root_links = self.__class__.deserialize(regex_data).root_links
         else:
-            self.root_links = regex_data
-        self._check_zero_links()
+            self.root_links = []
+            for data in regex_data:
+                if isinstance(data, dict):
+                    self.root_links.append(Link.deserialize(data))
+                else:
+                    self.root_links.append(data)
+        # self.root_links.
+        # elif all(isinstance(data, dict) for data in regex_data):
+        # elif not (len(regex_data) > 0 and isinstance(regex_data[0], Link)):
+        # self.root_links = self.__class__.deserialize(regex_data).root_links
+        # elif all(isinstance(data, Link) for data in regex_data):
+        # self.root_links = regex_data
 
     @classmethod
     def fit(cls, values: Union[Iterable, Sequence], count_thres: int = 3):
@@ -327,7 +338,7 @@ class RegexModel():
         -------
             Fitted regex model.
         """
-        series = pl.Series(list(values)).drop_nulls()
+        series = pl.Series(list(values)).drop_nulls()  # pylint: disable=assignment-from-no-return
         root_links = fit_series(series, score_thres=count_thres/len(series))
         return cls(root_links)
 
@@ -353,7 +364,7 @@ class RegexModel():
 
         For example used to store the model in a JSON file.
         """
-        return [link._param_dict() for link in self.root_links]
+        return [link.serialize() for link in self.root_links]
 
     @classmethod
     def deserialize(cls, regex_data: list):
@@ -364,13 +375,13 @@ class RegexModel():
         regex_data:
             Serialized regex model.
         """
-        root_links = [Link.from_dict(link_data) for link_data in regex_data]
+        root_links = [Link.deserialize(link_data) for link_data in regex_data]
         return cls(root_links)
 
     def draw(self) -> str:
         """Draw a structured string from the regex model."""
         counts = np.array([link.count for link in self.root_links])
-        link = np.random.choice(self.root_links, p=counts/np.sum(counts))
+        link = np.random.choice(self.root_links, p=counts/np.sum(counts))  # type: ignore
         return link.draw()
 
     @cached_property
@@ -384,7 +395,7 @@ class RegexModel():
         """Number of parameters of the model."""
         return np.sum([link.n_param for link in self.root_links])
 
-    def AIC(self, values) -> float:
+    def AIC(self, values) -> float:  # pylint: disable=invalid-name
         """Akaike Information Criterion for the given values."""
         return 2*self.n_param - 2*self.log_likelihood(values)
 
@@ -396,7 +407,7 @@ class RegexModel():
     def _check_zero_links(self):
         """Debug method."""
         for link in self.root_links:
-            link._check_zero_links()
+            link.check_zero_links()
 
     def fit_statistics(self, values) -> dict:
         """Get the performance of the regex model on some values.

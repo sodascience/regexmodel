@@ -1,3 +1,4 @@
+"""Utilities for the regex model."""
 from enum import Enum
 
 import numpy as np
