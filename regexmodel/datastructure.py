@@ -88,6 +88,7 @@ class Link():
         weights = np.array([node.tot_weight(Dir.LEFT) for node in center_nodes])
         prob = weights/np.sum(weights)
         entry_node = np.random.choice(center_nodes, p=prob)  # type: ignore
+        print("start", entry_node)
         return entry_node.draw()
 
     def get_main_branch(self) -> list[Node]:
