@@ -95,10 +95,10 @@ class MultiRegex(BaseRegex, ABC):
     @classmethod
     def fit(cls, series, score_thres, direction: Dir) -> tuple[MultiRegex, float, pl.Series]:
         if direction == Dir.LEFT:
-            first_elem = series.str.extract(r"[\S\s]*("+cls._base_regex+r"+)$")
+            first_elem = series.str.extract(r"(?:[\S\s]*?)*("+cls._base_regex+r"+)$")
             first_char = first_elem.str.extract(r"[\S\s]*([\S\s])$")
         else:
-            first_elem = series.str.extract(r"^("+cls._base_regex+r"+).*")
+            first_elem = series.str.extract(r"^("+cls._base_regex+r"+)[\S\s]*")
             first_char = first_elem.str.extract(r"^([\S\s])[\S\s]*")
         n_unique = len(first_char.drop_nulls().unique())
         # Score is dependent on number of unique values of first character.
@@ -128,10 +128,8 @@ class MultiRegex(BaseRegex, ABC):
         # Create an instance and return the score and the resulting series.
         instance = cls(min_len, max_len)
         if direction == Dir.LEFT:
-            first_elem = series.str.extract(r"[\S\s]*(" + instance.regex + r"})$")
-            new_series = series.str.extract(r"([\S\s]*)"+instance.regex+r"$")
+            new_series = series.str.extract(r"([\S\s]*?)"+instance.regex+r"$")
         else:
-            first_elem = series.str.extract(r"^(" + instance.regex + r"})[\S\s]*")
             new_series = series.str.extract(r"^"+instance.regex+r"([\S\s]*)")
 
         return instance, score, new_series

@@ -168,11 +168,8 @@ def extract_elements(cur_series: pl.Series,
     """
     if direction == Dir.BOTH:
         match_regex = r"^([\S\s]*?)" + regex + r"([\S\s]*?)$"
-        # start_elem = cur_series.str.extract(r"^([\S\s]*?)" + regex + r"[\S\s]*")
-        # end_elem = cur_series.str.extract(r"^[\S\s]*" + regex + r"([\S\s]*?)$")
         start_elem = cur_series.str.extract(match_regex, 1)
         end_elem = cur_series.str.extract(match_regex, 2)
-        # print(r"^[\S\s]*" + regex + r"([\S\s]*?)$")
     elif direction == Dir.LEFT:
         start_elem = cur_series.str.extract(r"^([\S\s]*?)" + regex + r"$")
         end_elem = None
@@ -234,11 +231,7 @@ def fit_series(  # pylint: disable=too-many-branches
         for regex, i_start, i_end in generate_sub_regexes(center_regex_list,
                                                           direction=direction):
             start_elem, end_elem = extract_elements(cur_series, regex, direction)
-            # if direction == Dir.BOTH:
-                # print(regex,
-                    #   cur_series.drop_nulls().to_numpy()[:4],
-                    #   start_elem.drop_nulls().to_numpy()[:4],
-                    #   end_elem.drop_nulls().to_numpy()[:4])
+
             if start_elem is not None:
                 cur_count = start_elem.drop_nulls().len()
             elif end_elem is not None:
