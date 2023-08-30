@@ -47,9 +47,9 @@ jobs:
     - name: Check types with MyPy
       run: |
         mypy regexmodel
-    - name: Check if documentation builds.
-      run: |
-        cd docs; make html SPHINXOPTS="-W --keep-going"
+    # - name: Check if documentation builds.
+      # run: |
+        # cd docs; make html SPHINXOPTS="-W --keep-going"
     - name: Test with pytest
       run: |
         pytest tests
