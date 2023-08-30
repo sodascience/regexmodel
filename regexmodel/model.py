@@ -310,7 +310,7 @@ class RegexModel():
             self.root_links = self.__class__.deserialize(regex_data).root_links
         else:
             self.root_links = regex_data
-        self.check_zero_links()
+        self._check_zero_links()
 
     @classmethod
     def fit(cls, values: Union[Iterable, Sequence], count_thres: int = 3):
@@ -350,7 +350,7 @@ class RegexModel():
 
     def serialize(self) -> list[dict]:
         """Serialize the regex model.
-        
+
         For example used to store the model in a JSON file.
         """
         return [link._param_dict() for link in self.root_links]

@@ -2,6 +2,7 @@
 
 from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict
+import time
 import json
 import sys
 
@@ -19,15 +20,16 @@ def run_bench(faker_type, count_thres, n_fake, locale="NL"):
     all_res = []
     for cur_n_fake in n_fake:
         for cur_count_thres in count_thres:
-            # counts = round(cur_rel_thres*cur_n_fake)
-            # while len(fake_data) < cur_n_fake:
-                # fake_data.append(getattr(fake, faker_type)())
-                # fake_data_2.append(getattr(fake, faker_type)())
+            start_time = time.time()
             model = RegexModel.fit(fake_data[:cur_n_fake], cur_count_thres)
+            mid_time = time.time()
             stats = model.fit_statistics(fake_data_2[:cur_n_fake])
+            end_time = time.time()
             success_rate = stats["success"]/(stats["success"] + stats["failed"])
             stats.update({"n_fake": cur_n_fake, "threshold": cur_count_thres,
-                          "success_rate": success_rate})
+                          "success_rate": success_rate,
+                          "fit_time": mid_time-start_time,
+                          "statistics_time": end_time-mid_time})
             all_res.append(stats)
     return all_res
 
