@@ -34,7 +34,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install ".[test]"
+        python -m pip install ".[test,tutorial]"
     - name: Check pep8 with flake8
       run: |
         flake8 regexmodel --max-line-length 100
