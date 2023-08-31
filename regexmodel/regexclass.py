@@ -193,7 +193,8 @@ class MultiRegex(BaseRegex, ABC):
 
     @classmethod
     def from_string(cls, regex_str) -> Optional[tuple[MultiRegex, str]]:
-        search_regex = r"^" + re.escape(cls._base_regex) + r"(?>{(\d+),(\d+)})?"
+        # It used to be, but changed for compatibility: r"(?>{(\d+),(\d+)})?"
+        search_regex = r"^" + re.escape(cls._base_regex) + r"(?:{(\d+),(\d+)})?"
         res = re.search(search_regex, regex_str)
         if res is None:
             return None
