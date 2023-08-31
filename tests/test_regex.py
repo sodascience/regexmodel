@@ -2,23 +2,16 @@ import string
 from random import choice
 
 import numpy as np
-import pandas as pd
-import polars as pl
 from pytest import mark, raises
 
-# from metasynth.distribution.regex import RegexDistribution, UniqueRegexDistribution
-# from metasynth.distribution.regex import LiteralRegex, DigitRegex, Dir
-# from metasynth.distribution.regex.element import SingleRegex,\
-    # DigitRegex, AlphaNumericRegex, LettersRegex, LowercaseRegex, UppercaseRegex,\
-    # AnyRegex
+
 from regexmodel import RegexModel
 from regexmodel.regexclass import LiteralRegex, DigitRegex
 from regexmodel.util import Dir
 
 
-@mark.parametrize("series_type", [pd.Series, pl.Series])
-def test_regex_single_digit(series_type):
-    series = series_type(["R123", "R837", "R354", "R456", "R578", "R699"])
+def test_regex_single_digit():
+    series = ["R123", "R837", "R354", "R456", "R578", "R699"]
     dist = RegexModel.fit(series)
 
     def check_regex_dist(dist):
