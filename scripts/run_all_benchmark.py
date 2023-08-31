@@ -10,7 +10,7 @@ from create_dataframe import create_dataframe
 if __name__ == "__main__":
     output_dir = Path("data")
     output_dir.mkdir(exist_ok=True)
-    bench_fp = output_dir/"bench.json"
+    bench_fp = output_dir/"benchmark.json"
     standard_run(bench_fp)
 
     for stat_name in ["avg_log_like_per_char", "n_parameters", "success_rate",
