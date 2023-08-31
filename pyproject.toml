@@ -41,11 +41,10 @@ test = [
 #    "XlsxWriter"
 ]
 
-# [project.scripts]
-# metasynth = "metasynth.__main__:main"
+tutorial = [
+    "pyvis", "networkx", "faker", 
+]
 
-# [project.entry-points."metasynth.distribution_provider"]
-# builtin = "metasynth.provider:BuiltinDistributionProvider"
 
 [tool.setuptools]
 packages = ["regexmodel"]
@@ -60,3 +59,10 @@ ignore-patterns="_version.py"
 max-line-length=100
 max-locals=35
 max-args=10
+
+[[tool.mypy.overrides]]
+module = [
+    "networkx.*",
+    "pyvis.*",
+]
+ignore_missing_imports = true
