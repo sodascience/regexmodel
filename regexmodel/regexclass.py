@@ -444,10 +444,12 @@ def fit_best_regex_class(series: pl.Series, score_thres: float,
     for regex_class in ALL_REGEX_CLASS:
         regex_inst, score, new_series = regex_class.fit(
             series, score_thres=score_thres, direction=direction)
+        alt_series = series.set(new_series.is_not_null(), None)  # type: ignore
         if score > best_regex["score"]:
             best_regex = {
                 "score": score,
                 "regex": regex_inst,
                 "new_series": new_series,
+                "alt_series": alt_series,
             }
     return best_regex
