@@ -1,5 +1,6 @@
 import numpy as np
 from regexmodel.util import Dir
+from regexmodel.regexclass import BaseRegex
 
 
 class BaseNode():
@@ -13,6 +14,7 @@ class RegexNode(BaseNode):
         # self.super_edge = edge if super_edges is None else super_edge
         self._regex = regex
         self.next = next_edge
+        assert isinstance(regex, BaseRegex)
         assert isinstance(self.next, Edge)
 
     @property
@@ -36,7 +38,7 @@ class OrNode(BaseNode):
         regex_str = "|".join(regex_str_list)
         if len(self.edges) > 1:
             return r"(" + regex_str + ")"
-        return regex_str       
+        return regex_str
 
     def add_edge(self, new_edge):
         self.count += new_edge.count
@@ -60,10 +62,3 @@ class Edge():
         if self.destination is None:
             return ""
         return self.destination.full_regex
-
-    # def simplify(self):
-    #     node = self.destination
-    #     if node is None or isinstance(node, RegexNode):
-    #         return
-    #     if len(node.edges) == 1:
-        
