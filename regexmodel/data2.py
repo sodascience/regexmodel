@@ -1,5 +1,5 @@
 import numpy as np
-from regexmodel.util import Dir, sum_prob_log
+from regexmodel.util import Dir
 from regexmodel.regexclass import BaseRegex
 
 
@@ -11,7 +11,6 @@ class BaseNode():
 
 class RegexNode(BaseNode):
     def __init__(self, regex, next_edge):
-        # self.super_edge = edge if super_edges is None else super_edge
         self._regex = regex
         self.next = next_edge
         assert isinstance(regex, BaseRegex)
@@ -29,13 +28,13 @@ class RegexNode(BaseNode):
     def n_param(self):
         return self.next.n_param
 
+    def __str__(self):
+        return "Regex " + self.regex
+
     def log_likelihood(self, value):
-        all_probs = []
-        log_prob_next = []
-        for post_str, prob in self._regex.fit_value(value):
-            all_probs.append(prob)
-            log_prob_next.append(self.next.log_likelihood(post_str))
-        return sum_prob_log(all_probs, log_prob_next)
+        for post_str, prob in self._regex.fit_value(value, direction=Dir.RIGHT):
+            for next_str, next_log in self.next.log_likelihood(post_str):
+                yield next_str, np.log(prob) + next_log
 
 
 class OrNode(BaseNode):
@@ -56,7 +55,7 @@ class OrNode(BaseNode):
         self.count += new_edge.count
         self.edges.append(new_edge)
 
-    def __repr__(self):
+    def __str__(self):
         return f"{self.__class__.__name__} <{self.regex}> -> <{self.next.regex}>"
 
     @property
@@ -66,9 +65,14 @@ class OrNode(BaseNode):
 
     def log_likelihood(self, value):
         probs = np.array([edge.count for edge in self.edges])
-        probs /= np.sum(probs)
-        log_likes = np.array([edge.log_like(value) for edge in self.edges])
-        return sum_prob_log(probs, log_likes)
+        probs = probs/np.sum(probs)
+        for prob, edge in zip(probs, self.edges):
+            for post_str, log_prob in edge.log_likelihood(value):
+                if self.next:
+                    for next_post_str, next_log_prob in self.next.log_likelihood(post_str):
+                        yield next_post_str, next_log_prob + log_prob + np.log(prob)
+                else:
+                    yield post_str, log_prob + np.log(prob)
 
 
 class Edge():
@@ -90,3 +94,18 @@ class Edge():
         if self.destination is None:
             return 1
         return self.destination.n_param + 1
+
+    def log_likelihood(self, value):
+        if self.destination is None:
+            yield value, 0
+        else:
+            yield from self.destination.log_likelihood(value)
+
+    def __str__(self):
+        ret_str = "Edge <"
+        if self.destination is None:
+            ret_str += "None"
+        else:
+            ret_str += self.destination.regex
+        ret_str += ">"
+        return ret_str

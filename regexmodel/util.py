@@ -30,3 +30,11 @@ def sum_prob_log(probs, log_likes):
         return np.log(sum_prob) + max_log
     # Sometimes the sum is basically zero, because all links are not possible.
     return UNVIABLE_REGEX + max_log
+
+
+def sum_log(log_likes):
+    log_likes = np.array(log_likes)
+    max_log = np.max(log_likes)
+    rel_probs = np.exp(log_likes-max_log)
+    sum_prob = np.sum(rel_probs)
+    return np.log(sum_prob) + max_log
