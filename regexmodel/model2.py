@@ -31,7 +31,7 @@ def _simplify_edge(edge):
 
 def fit_main_branch(series: pl.Series,
                     count_thres: float,
-                    direction=Dir.RIGHT) -> list[BaseRegex]:
+                    direction=Dir.RIGHT) -> Edge:
 
     # Use the returnnode/edge for returning
     return_node = OrNode([], Edge(None, 0))
@@ -84,7 +84,7 @@ def fit_main_branch(series: pl.Series,
     return _simplify_edge(Edge(return_node))
 
 
-class RegexModel2():
+class RegexModel():
     """Model class to fit and create structured strings.
 
     This class models structured strings and new strings can be drawn from this model.
@@ -107,7 +107,7 @@ class RegexModel2():
     """
 
     def __init__(self, regex_data: Edge):
-        self.regex_edge: regex_data
+        self.regex_edge = regex_data
         # if isinstance(regex_data, str):
         #     self.root_links = self.__class__.from_regex(regex_data).root_links
         # elif isinstance(regex_data, RegexModel):
@@ -135,6 +135,7 @@ class RegexModel2():
         -------
             Fitted regex model.
         """
+        values = pl.Series(values)
         return cls(fit_main_branch(values, count_thres=count_thres))
         # series = pl.Series(list(values)).drop_nulls()  # pylint: disable=assignment-from-no-return
         # root_links = fit_series(series, score_thres=count_thres/len(series))
@@ -178,9 +179,9 @@ class RegexModel2():
 
     def draw(self) -> str:
         """Draw a structured string from the regex model."""
-        counts = np.array([link.count for link in self.root_links])
-        link = np.random.choice(self.root_links, p=counts/np.sum(counts))  # type: ignore
-        return link.draw()
+        # counts = np.array([link.count for link in self.root_links])
+        # link = np.random.choice(self.root_links, p=counts/np.sum(counts))  # type: ignore
+        # return link.draw()
 
     @cached_property
     def _root_prob(self):
