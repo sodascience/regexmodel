@@ -8,7 +8,7 @@ from create_dataframe import create_dataframe
 
 
 if __name__ == "__main__":
-    output_dir = Path("data")
+    output_dir = Path("data2")
     output_dir.mkdir(exist_ok=True)
     bench_fp = output_dir/"benchmark.json"
     standard_run(bench_fp)
