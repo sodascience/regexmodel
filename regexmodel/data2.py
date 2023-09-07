@@ -1,6 +1,8 @@
+from functools import cached_property
+
 import numpy as np
 from regexmodel.util import Dir
-from regexmodel.regexclass import BaseRegex
+from regexmodel.regexclass2 import BaseRegex
 
 
 class BaseNode():
@@ -13,7 +15,7 @@ class RegexNode(BaseNode):
     def __init__(self, regex, next_edge):
         self._regex = regex
         self.next = next_edge
-        assert isinstance(regex, BaseRegex)
+        assert isinstance(regex, BaseRegex), str(regex)
         assert isinstance(self.next, Edge)
 
     @property
@@ -35,6 +37,9 @@ class RegexNode(BaseNode):
         for post_str, prob in self._regex.fit_value(value, direction=Dir.RIGHT):
             for next_str, next_log in self.next.log_likelihood(post_str):
                 yield next_str, np.log(prob) + next_log
+
+    def draw(self):
+        return self._regex.draw() + self.next.draw()
 
 
 class OrNode(BaseNode):
@@ -62,6 +67,15 @@ class OrNode(BaseNode):
     def n_param(self):
         sub_param = np.sum([edge.n_param for edge in self.edges])
         return sub_param + self.next.n_param
+
+    @cached_property
+    def probabilities(self):
+        probs = np.array([edge.count for edge in self.edges])
+        return probs/np.sum(probs)
+
+    def draw(self):
+        edge = np.random.choice(self.edges, p=self.probabilities)
+        return edge.draw() + self.next.draw()
 
     def log_likelihood(self, value):
         probs = np.array([edge.count for edge in self.edges])
@@ -100,6 +114,11 @@ class Edge():
             yield value, 0
         else:
             yield from self.destination.log_likelihood(value)
+
+    def draw(self):
+        if self.destination is None:
+            return ""
+        return self.destination.draw()
 
     def __str__(self):
         ret_str = "Edge <"

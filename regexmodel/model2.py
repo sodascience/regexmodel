@@ -8,8 +8,8 @@ from typing import Iterator, Optional, Iterable, Sequence, Union
 import numpy as np
 import polars as pl
 
-from regexmodel.regexclass import BaseRegex
-from regexmodel.regexclass import MultiRegex, regex_list_from_string, fit_best_regex_class
+from regexmodel.regexclass2 import BaseRegex
+from regexmodel.regexclass2 import MultiRegex, regex_list_from_string, fit_best_regex_class
 from regexmodel.util import Dir, sum_prob_log, sum_log
 from regexmodel.data2 import Edge, RegexNode, OrNode
 from regexmodel.datastructure import LOG_LIKE_PER_CHAR
@@ -30,8 +30,7 @@ def _simplify_edge(edge):
 
 
 def fit_main_branch(series: pl.Series,
-                    count_thres: float,
-                    direction=Dir.RIGHT) -> Edge:
+                    count_thres: int) -> Edge:
 
     # Use the returnnode/edge for returning
     return_node = OrNode([], Edge(None, 0))
@@ -44,15 +43,14 @@ def fit_main_branch(series: pl.Series,
     cur_series = series.set(series == "", None)  # type: ignore
 
     while cur_series.drop_nulls().len() > count_thres:
-        result = fit_best_regex_class(cur_series, count_thres/len(series), direction=direction)
+        result = fit_best_regex_class(cur_series, count_thres)
 
         # If the regex fails the threshold, stop the search.
-        if result["score"] < count_thres/len(series):
+        if result is None:
             return _simplify_edge(Edge(return_node))
 
         new_edge = fit_main_branch(
-            result["new_series"], count_thres=count_thres,
-            direction=direction)
+            result["new_series"], count_thres=count_thres)
 
         # If there are no paths to the end of the string, quit.
         if new_edge.count == 0:
@@ -69,7 +67,7 @@ def fit_main_branch(series: pl.Series,
         alt_series = result["alt_series"]
         if alt_series.drop_nulls().len() > count_thres:
             opt_series = alt_series.str.extract(r"(^[\S\s]*?)" + main_edge.regex + r"$")
-            alt_edge = fit_main_branch(opt_series, count_thres, direction)
+            alt_edge = fit_main_branch(opt_series, count_thres)
             if alt_edge.count > 0:
                 cur_or_node.add_edge(alt_edge)
                 match_regex = r"^(" + alt_edge.regex + r")$"
@@ -179,6 +177,7 @@ class RegexModel():
 
     def draw(self) -> str:
         """Draw a structured string from the regex model."""
+        return self.regex_edge.draw()
         # counts = np.array([link.count for link in self.root_links])
         # link = np.random.choice(self.root_links, p=counts/np.sum(counts))  # type: ignore
         # return link.draw()
@@ -192,8 +191,12 @@ class RegexModel():
     @cached_property
     def n_param(self):
         """Number of parameters of the model."""
-        self.regex_edge.n_param
+        return self.regex_edge.n_param
         # return np.sum([link.n_param for link in self.root_links])
+
+    @cached_property
+    def regex(self):
+        return self.regex_edge.regex
 
     def AIC(self, values) -> float:  # pylint: disable=invalid-name
         """Akaike Information Criterion for the given values."""
@@ -235,12 +238,12 @@ class RegexModel():
             "avg_log_like_pc_success": 0.0,
         }
         for val in values:
-            log_like_data = list(self.regex_edge.log_likelihood(val))
-            if len(log_like_data) == 0:
+            log_likes = [x[1] for x in self.regex_edge.log_likelihood(val) if x[0] == ""]
+            if len(log_likes) == 0:
                 cur_log_like = max(len(val), 1)*LOG_LIKE_PER_CHAR
                 res["failed"] += 1
             else:
-                cur_log_like = sum_log([x[1] for x in log_like_data])
+                cur_log_like = sum_log(log_likes)
                 res["n_char_success"] += len(val)
                 res["avg_log_like_pc_success"] += cur_log_like
                 res["success"] += 1
