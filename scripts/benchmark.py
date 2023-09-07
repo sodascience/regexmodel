@@ -8,7 +8,7 @@ import sys
 
 from faker import Faker
 
-from regexmodel.model2 import RegexModel
+from regexmodel.model import RegexModel
 
 
 def run_bench(faker_type, count_thres, n_fake, locale="NL"):

@@ -6,6 +6,7 @@ import numpy as np
 
 # Used for log likelihood estimation to signify this branch isn't used (for that particular string).
 UNVIABLE_REGEX = -1000000
+LOG_LIKE_PER_CHAR = np.log(1e-3)
 
 
 class Dir(Enum):
@@ -33,6 +34,7 @@ def sum_prob_log(probs, log_likes):
 
 
 def sum_log(log_likes):
+    """Sum of log likelihoods."""
     log_likes = np.array(log_likes)
     max_log = np.max(log_likes)
     rel_probs = np.exp(log_likes-max_log)
