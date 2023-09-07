@@ -78,7 +78,7 @@ class BaseRegex(ABC):
         return series.str.extract(r"^(" + self.regex + r")[\S\s]*")
 
     def extract_after_first(self, series) -> str:
-        print(self.regex)
+        # print(self.regex)
         return series.str.extract(r"^" + self.regex + r"([\S\s]*)$")
 
 
@@ -260,12 +260,16 @@ def get_class_stat(series, count_thres):
 
 
 def _get_bounds(key, count_dict, count_thres, sigma, tot_counts):
+    if tot_counts == 0:
+        return 0, 1
+    rel_delta = sigma*np.sqrt(count_thres)/tot_counts
+    rel_delta = max(0.15, rel_delta)
     if key in count_dict:
-        lower_bound = (count_dict[key] - sigma*np.sqrt(count_thres))/tot_counts
-        upper_bound = (count_dict[key] + sigma*np.sqrt(count_thres))/tot_counts
+        lower_bound = count_dict[key]/tot_counts - rel_delta
+        upper_bound = count_dict[key]/tot_counts + rel_delta
     else:
         lower_bound = 0
-        upper_bound = (count_thres + sigma*np.sqrt(count_thres))/tot_counts
+        upper_bound = count_thres/tot_counts + rel_delta
     return lower_bound, upper_bound
 
 
@@ -274,17 +278,15 @@ def _check_stat_compatible(stat_a, tot_a, stat_b, tot_b, count_thres, sigma=3):
                    for regex, score, series in stat_a}
     dict_stat_b = {regex._base_regex: len(series)-series.null_count()
                    for regex, score, series in stat_b}
-    # tot_a = np.sum([x for x in dict_stat_a.values()])
-    # tot_b = np.sum([x for x in dict_stat_b.values()])
     for key in (set(dict_stat_a) | set(dict_stat_b)):
         lower_a, upper_a = _get_bounds(key, dict_stat_a, count_thres, sigma, tot_a)
         lower_b, upper_b = _get_bounds(key, dict_stat_b, count_thres, sigma, tot_b)
-        print(key, lower_a, upper_a, lower_b, upper_b, lower_a > upper_b or lower_b > upper_a)
+        # print(key, lower_a, upper_a, lower_b, upper_b, lower_a > upper_b or lower_b > upper_a)
         if lower_a > upper_b or lower_b > upper_a:
-            print({key: a/tot_a for key, a in dict_stat_a.items()})
-            print({key: b/tot_b for key, b in dict_stat_b.items()})
-            print(dict_stat_a)
-            print(dict_stat_b)
+            # print({key: a/tot_a for key, a in dict_stat_a.items()})
+            # print({key: b/tot_b for key, b in dict_stat_b.items()})
+            # print(dict_stat_a)
+            # print(dict_stat_b)
             return False
     return True
 
@@ -430,7 +432,7 @@ class LiteralRegex(BaseRegex):
 
     @property
     def _base_regex(self):
-        return "".join(self.literals)
+        return "".join(re.escape(x) if x not in [" "] else x for x in self.literals)
 
     @property
     def n_possible(self):
@@ -505,7 +507,7 @@ class LiteralRegex(BaseRegex):
 
     @property
     def regex(self):
-        return r"[" + "".join(re.escape(x) if x not in [" "] else x for x in self.literals) + r"]"
+        return r"[" + self._base_regex + r"]"
 
     def draw(self):
         return np.random.choice(self.literals)
@@ -589,22 +591,19 @@ def fit_best_regex_class(series: pl.Series, count_thres: int) -> Optional[dict]:
     cur_best_regex = OrRegex([cur_best_regex])
     cur_series = series.set(cur_best_series.is_not_null(), None)  # type: ignore
 
-    print(_preview(cur_series))
-    print({rex: score for rex, score, _ in class_stat})
+    # print(_preview(cur_series))
+    # print({rex: score for rex, score, _ in class_stat})
     for cur_regex, score, _ in class_stat[1:]:
-        print("------", cur_regex.regex)
+        # print("------", cur_regex.regex)
         if cur_best_regex.covers(cur_regex):
-            print("covered")
+            # print("covered")
             continue
-        
+
         new_cur_series = cur_regex.extract_after_first(cur_series)
-        # series.str.extract(r"^[^(" + cur_best_regex._base_regex + r")"
-                                        # + cur_regex._base_regex + r"]([\S\s]*)")
-        # print(r"^[^(" + cur_best_regex._base_regex + r")"
-                                        # + cur_regex._base_regex + r"]([\S\s]*)")
+
         cur_non_null = len(series) - new_cur_series.null_count()
         if cur_non_null < count_thres:
-            print("Failed threshold", cur_non_null)
+            # print("Failed threshold", cur_non_null)
             continue
         cur_new_class_stat = get_class_stat(new_cur_series, count_thres)
         best_new_class_stat = get_class_stat(cur_best_series, count_thres)
@@ -614,31 +613,31 @@ def fit_best_regex_class(series: pl.Series, count_thres: int) -> Optional[dict]:
         compatible = _check_stat_compatible(best_new_class_stat, best_count,
                                             cur_new_class_stat, cur_count, count_thres)
         if compatible:
-            print("Compatible")
+            # print("Compatible")
             cur_best_regex.append(cur_regex)
         cur_series = cur_series.set(new_cur_series.is_not_null(), None)  # type: ignore
-        print(_preview(cur_series))
+        # print(_preview(cur_series))
 
     cur_series = series
     cur_series = cur_best_regex.extract_after_first(series)
-    print(series.str.lengths().mean(), cur_series.str.lengths().mean())
+    # print(series.str.lengths().mean(), cur_series.str.lengths().mean())
     start_non_null = len(series) - cur_series.null_count()
     i_start = None
     i_end = None
     for cur_i in range(1, 100):
 
         compatible = cur_best_regex.check_compatibility(cur_series, count_thres)
+        cur_series = cur_best_regex.extract_after_first(cur_series)
         cur_non_null = len(cur_series) - cur_series.null_count()
+        # print(compatible, cur_non_null, count_thres, cur_i)
         if not compatible or cur_non_null < count_thres:
-            print(compatible, cur_non_null, count_thres)
             if i_start is None:
-                i_start = cur_i-1
-            i_end = cur_i-1
+                i_start = cur_i
+            i_end = cur_i
             break
 
         if cur_non_null < start_non_null - count_thres and i_start is None:
-            i_start = cur_i-1
-        cur_series = cur_best_regex.extract_after_first(cur_series)
+            i_start = cur_i
 
     if i_end is None:
         i_end = 100
@@ -648,7 +647,7 @@ def fit_best_regex_class(series: pl.Series, count_thres: int) -> Optional[dict]:
 
     new_series = cur_best_regex.extract_after_first(series)
     alt_series = series.set(new_series.is_not_null(), None)  # type: ignore
-    print("return", cur_best_regex.regex, best_score, count_thres/len(series))
+    # print("return", cur_best_regex.regex, best_score, count_thres/len(series))
     return {
         "score": best_score,
         "regex": cur_best_regex,
