@@ -14,7 +14,7 @@ if __name__ == "__main__":
     standard_run(bench_fp)
 
     for stat_name in ["avg_log_like_per_char", "n_parameters", "success_rate",
-                      "fit_time", "statistics_time"]:
+                      "fit_time", "statistics_time", "avg_log_like_pc_success"]:
         # bench_fp, output_dir, stat_name = sys.argv[1:4]
         with open(bench_fp, "r") as handle:
             bench_data = json.load(handle)

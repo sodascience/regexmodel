@@ -32,7 +32,7 @@ class RegexNode(BaseNode):
         return self.next.n_param
 
     def __str__(self):
-        return "Regex " + self.regex
+        return "Regex <" + self.regex + ">"
 
     def log_likelihood(self, value):
         for post_str, prob in self._regex.fit_value(value, direction=Dir.RIGHT):
