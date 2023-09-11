@@ -28,7 +28,8 @@ def _simplify_edge(edge):
 
 
 def fit_main_branch(series: pl.Series,
-                    count_thres: int) -> Edge:
+                    count_thres: int,
+                    force_merge: bool = False) -> Edge:
 
     # Use the returnnode/edge for returning
     return_node = OrNode([], Edge(None, 0))
@@ -41,17 +42,21 @@ def fit_main_branch(series: pl.Series,
     cur_series = series.set(series == "", None)  # type: ignore
 
     while cur_series.drop_nulls().len() > count_thres:
-        result = fit_best_regex_class(cur_series, count_thres)
+        result = fit_best_regex_class(cur_series, count_thres, force_merge=force_merge)
 
         # If the regex fails the threshold, stop the search.
         if result is None:
             return _simplify_edge(Edge(return_node))
 
         new_edge = fit_main_branch(
-            result["new_series"], count_thres=count_thres)
+            result["new_series"], count_thres=count_thres,
+            force_merge=force_merge)
 
         # If there are no paths to the end of the string, quit.
         if new_edge.count == 0:
+            if not force_merge:
+                force_merge = True
+                continue
             return _simplify_edge(Edge(return_node))
 
         # Remove the considered items from the current series
@@ -65,7 +70,7 @@ def fit_main_branch(series: pl.Series,
         alt_series = result["alt_series"]
         if alt_series.drop_nulls().len() > count_thres:
             opt_series = alt_series.str.extract(r"(^[\S\s]*?)" + main_edge.regex + r"$")
-            alt_edge = fit_main_branch(opt_series, count_thres)
+            alt_edge = fit_main_branch(opt_series, count_thres, force_merge=force_merge)
             if alt_edge.count > 0:
                 cur_or_node.add_edge(alt_edge)
                 match_regex = r"^(" + alt_edge.regex + r")$"
