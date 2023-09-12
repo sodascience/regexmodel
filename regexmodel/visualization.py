@@ -1,4 +1,5 @@
 """Visualization of the regex model, needs the optional dependencies."""
+from __future__ import annotations
 
 try:
     import networkx as nx
@@ -31,8 +32,8 @@ def _create_network(graph: nx.DiGraph, edge: Edge, labels: list[str], prev_label
         return _create_network(graph, cur_node.next, labels, [cur_i_label])
 
     all_ends = []
-    for edge in cur_node.edges:  # type: ignore
-        all_ends.extend(_create_network(graph, edge, labels, [cur_i_label]))
+    for cur_edge in cur_node.edges:  # type: ignore
+        all_ends.extend(_create_network(graph, cur_edge, labels, [cur_i_label]))
     if cur_node.next.destination is None:
         return all_ends
     return _create_network(graph, cur_node.next, labels, all_ends)
