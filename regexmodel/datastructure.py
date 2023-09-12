@@ -1,9 +1,11 @@
 """Regex classes such as [0-9], [a-z], etc are defined in this module."""
+from __future__ import annotations
 from functools import cached_property
+
 
 import numpy as np
 from regexmodel.util import Dir
-from regexmodel.regexclass import BaseRegex
+from regexmodel.regexclass import BaseRegex, OrRegex
 
 
 class BaseNode():
@@ -46,8 +48,8 @@ class RegexNode(BaseNode):
 class OrNode(BaseNode):
     def __init__(self, edges, next_edge):
         self.edges = edges
-        self.count = np.sum([edge.count for edge in self.edges])
         self.next = next_edge
+        self.recount()
 
     @property
     def regex(self):
@@ -77,6 +79,9 @@ class OrNode(BaseNode):
     def draw(self):
         edge = np.random.choice(self.edges, p=self.probabilities)
         return edge.draw() + self.next.draw()
+
+    def recount(self):
+        self.count = np.sum([edge.count for edge in self.edges]).astype(int)
 
     def log_likelihood(self, value):
         probs = np.array([edge.count for edge in self.edges])
@@ -129,3 +134,58 @@ class Edge():
             ret_str += self.destination.regex
         ret_str += ">"
         return ret_str
+
+    @property
+    def count_list(self):
+        if self.destination is None:
+            return [self.count]
+        if isinstance(self.destination, OrNode):
+            or_counts = [edge.count_list for edge in self.destination.edges]
+            return [or_counts, *self.destination.next.count_list]
+        elif isinstance(self.destination, RegexNode):
+            return [self.count, *self.destination.next.count_list]
+        raise ValueError("Internal Error")
+
+    @classmethod
+    def from_string(cls, regex_str) -> tuple[Edge, str]:
+        if len(regex_str) == 0:
+            return cls(None, 1), ""
+        if regex_str[0] == "[":
+            new_regex, cur_regex_str = OrRegex.from_string(regex_str)
+            new_edge, new_str = cls.from_string(cur_regex_str)
+            return cls(RegexNode(new_regex, new_edge), 1), new_str
+
+        elif regex_str[0] == "(":
+            all_edges = []
+            cur_regex_str = regex_str[1:]
+            while cur_regex_str[0] != ")":
+                new_edge, cur_regex_str = cls.from_string(cur_regex_str)
+                all_edges.append(new_edge)
+                if len(cur_regex_str) == 0:
+                    raise ValueError("Unterminated ')' in regex.")
+            next_edge, next_str = cls.from_string(cur_regex_str[1:])
+            return cls(OrNode(all_edges, next_edge), 1), next_str
+
+        elif regex_str[0] == "|":
+            return cls(None, 1), regex_str[1:]
+        elif regex_str[0] == ")":
+            return cls(None, 1), regex_str
+        else:
+            raise ValueError(f"Error reading regex: currently still have: {regex_str}")
+
+    def set_counts(self, counts):
+        if isinstance(counts, int):
+            self.count = counts
+            return
+        if len(counts) == 1 and self.destination is None:
+            self.count = counts[0]
+            return
+        assert self.destination is not None
+        if isinstance(self.destination, OrNode):
+            for cur_counts, edge in zip(counts[0], self.destination.edges):
+                edge.set_counts(cur_counts)
+            self.destination.recount()
+            self.count = self.destination.count
+        elif isinstance(self.destination, RegexNode):
+            self.count = counts[0]
+        self.destination.next.set_counts(counts[1:])

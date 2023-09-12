@@ -107,19 +107,23 @@ class RegexModel():
         - list[dict]: A serialized version of the regex model.
     """
 
-    def __init__(self, regex_data: Edge):
-        self.regex_edge = regex_data
-        # if isinstance(regex_data, str):
-        #     self.root_links = self.__class__.from_regex(regex_data).root_links
-        # elif isinstance(regex_data, RegexModel):
-        #     self.root_links = regex_data.root_links
-        # else:
-        #     self.root_links = []
-        #     for data in regex_data:
-        #         if isinstance(data, dict):
-        #             self.root_links.append(Link.deserialize(data))
-        #         else:
-        #             self.root_links.append(data)
+    def __init__(self, regex_data: Union[Edge, str, dict, RegexModel, list, tuple]):
+        if isinstance(regex_data, Edge):
+            self.regex_edge = regex_data
+        elif isinstance(regex_data, str):
+            self.regex_edge, regex_str = Edge.from_string(regex_data)
+            assert regex_str == ""
+        elif isinstance(regex_data, RegexModel):
+            self.regex_edge = regex_data.regex_edge
+        else:
+            if isinstance(regex_data, dict):
+                regex_str, counts = regex_data["regex"], regex_data["counts"]
+            else:
+                assert len(regex_data) == 2
+                regex_str, counts = regex_data
+            self.regex_edge, regex_str = Edge.from_string(regex_str)
+            assert regex_str == ""
+            self.regex_edge.set_counts(counts)
 
     @classmethod
     def fit(cls, values: Union[Iterable, Sequence], count_thres: int = 3):
@@ -138,45 +142,42 @@ class RegexModel():
         """
         values = pl.Series(values)
         return cls(fit_main_branch(values, count_thres=count_thres))
-        # series = pl.Series(list(values)).drop_nulls()  # pylint: disable=assignment-from-no-return
-        # root_links = fit_series(series, score_thres=count_thres/len(series))
-        # return cls(root_links)
 
-    # @classmethod
-    # def from_regex(cls, regex_str: str):
-    #     """Create a regex model from a regex string.
-    #
-    #     It creates a simple model with no branches and with weights {1, 0}.
-    #
-    #     Parameters
-    #     ----------
-    #     regex_str:
-    #         Regex to create the model from.
-    #     """
-    #     all_regexes = regex_list_from_string(regex_str)
-    #     link, nodes = Node.main_branch(all_regexes, Dir.BOTH, 1)
-    #     nodes[0].sub_links.append(Link(1, Dir.LEFT))
-    #     nodes[-1].sub_links.append(Link(1, Dir.RIGHT))
-    #     return cls([link])
+    @classmethod
+    def from_regex(cls, regex_str: str):
+        """Create a regex model from a regex string.
 
-    # def serialize(self) -> list[dict]:
-    #     """Serialize the regex model.
-    #
-    #     For example used to store the model in a JSON file.
-    #     """
-    #     return [link.serialize() for link in self.root_links]
-    #
-    # @classmethod
-    # def deserialize(cls, regex_data: list):
-    #     """Create a regex model from the serialization.
-    #
-    #     Parameters
-    #     ----------
-    #     regex_data:
-    #         Serialized regex model.
-    #     """
-    #     root_links = [Link.deserialize(link_data) for link_data in regex_data]
-    #     return cls(root_links)
+        It creates a simple model with no branches and with weights {1, 0}.
+
+        Parameters
+        ----------
+        regex_str:
+            Regex to create the model from.
+        """
+        return cls(regex_str)
+
+    def serialize(self) -> dict:
+        """Serialize the regex model.
+
+        For example used to store the model in a JSON file.
+        """
+        regex_str = self.regex_edge.regex
+        counts = self.regex_edge.count_list
+        return {
+            "regex": regex_str,
+            "counts": counts,
+        }
+
+    @classmethod
+    def deserialize(cls, regex_data: dict):
+        """Create a regex model from the serialization.
+
+        Parameters
+        ----------
+        regex_data:
+            Serialized regex model.
+        """
+        return cls(regex_data)
 
     def draw(self) -> str:
         """Draw a structured string from the regex model."""
