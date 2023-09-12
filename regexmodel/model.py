@@ -2,14 +2,12 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Iterator, Optional, Iterable, Sequence, Union
+from typing import Iterable, Sequence, Union
 
-import numpy as np
 import polars as pl
 
-from regexmodel.regexclass import BaseRegex
-from regexmodel.regexclass import regex_list_from_string, fit_best_regex_class
-from regexmodel.util import sum_prob_log, sum_log, LOG_LIKE_PER_CHAR
+from regexmodel.regexclass import fit_best_regex_class
+from regexmodel.util import sum_log, LOG_LIKE_PER_CHAR
 from regexmodel.datastructure import Edge, OrNode, RegexNode
 # from regexmodel.model import fit_main_branch
 
@@ -30,13 +28,36 @@ def _simplify_edge(edge):
 def fit_main_branch(series: pl.Series,
                     count_thres: int,
                     force_merge: bool = False) -> Edge:
+    """Fit the regex model.
+
+    This is the main function that creates the finite automata.
+    It does so by first trying to create a regex that fits the strings
+    that have the most in common.
+
+    Arguments
+    ---------
+    series:
+        Values as a polars series to be fitted into the regex model.
+    count_thres:
+        Threshold that determines how detailed the model will look at exceptions.
+        Lower values mean a more detailed, and generally slower resulting model.
+    force_merge:
+        In some cases it might not be possible to find a main branch that satisfies the
+        count_thres threshold. In this case, you can use force_merge, which will
+        result in regexclasses with more options. This will result in a thicker main
+        branch, and faster fitting. Generally, it will result in less parameters,
+        but worse results.
+
+    Returns
+    -------
+        Edge that has the finite automata, and can draw new values.
+    """
 
     # Use the returnnode/edge for returning
     return_node = OrNode([], Edge(None, 0))
-    # return_edge = Edge(return_node)
 
     # Add an END edge
-    n_end_links = (series == "").sum()
+    n_end_links = int((series == "").sum())
     if n_end_links > count_thres:
         return_node.add_edge(Edge(None, n_end_links))
     cur_series = series.set(series == "", None)  # type: ignore
@@ -101,10 +122,10 @@ class RegexModel():
         - string: Create a regex model that follows exactly this regex. The language model of this
                   class is more limited than full regex, with only [0-9], [a-z], [A-Z], [xsd]
                   available.
-        - list[Link]: This is the native underlying datastructure with which the model is
-                      initialized.
+        - Edge: This is the native underlying datastructure with which the model is
+                initialized.
         - RegexModel: Creates a shallow copy of another regex model.
-        - list[dict]: A serialized version of the regex model.
+        - dict: A serialized version of the regex model.
     """
 
     def __init__(self, regex_data: Union[Edge, str, dict, RegexModel, list, tuple]):
@@ -126,7 +147,8 @@ class RegexModel():
             self.regex_edge.set_counts(counts)
 
     @classmethod
-    def fit(cls, values: Union[Iterable, Sequence], count_thres: int = 3):
+    def fit(cls, values: Union[Iterable, Sequence], count_thres: int = 3,
+            method="accurate"):
         """Fit a sequence of values to create a regex model.
 
         Parameters
@@ -141,7 +163,11 @@ class RegexModel():
             Fitted regex model.
         """
         values = pl.Series(values)
-        return cls(fit_main_branch(values, count_thres=count_thres))
+        if method == "accurate":
+            force_merge = False
+        else:
+            force_merge = True
+        return cls(fit_main_branch(values, count_thres=count_thres, force_merge=force_merge))
 
     @classmethod
     def from_regex(cls, regex_str: str):
@@ -169,7 +195,7 @@ class RegexModel():
         }
 
     @classmethod
-    def deserialize(cls, regex_data: dict):
+    def deserialize(cls, regex_data: dict) -> RegexModel:
         """Create a regex model from the serialization.
 
         Parameters
@@ -182,24 +208,15 @@ class RegexModel():
     def draw(self) -> str:
         """Draw a structured string from the regex model."""
         return self.regex_edge.draw()
-        # counts = np.array([link.count for link in self.root_links])
-        # link = np.random.choice(self.root_links, p=counts/np.sum(counts))  # type: ignore
-        # return link.draw()
 
     @cached_property
-    def _root_prob(self):
-        """Return the probability of each main branch."""
-        counts = np.array([link.count for link in self.root_links])
-        return counts/np.sum(counts)
-
-    @cached_property
-    def n_param(self):
+    def n_param(self) -> int:
         """Number of parameters of the model."""
         return self.regex_edge.n_param
-        # return np.sum([link.n_param for link in self.root_links])
 
     @cached_property
-    def regex(self):
+    def regex(self) -> str:
+        """Get the regex that has been fitted."""
         return self.regex_edge.regex
 
     def AIC(self, values) -> float:  # pylint: disable=invalid-name
@@ -210,11 +227,6 @@ class RegexModel():
         """Log likelihood for the given values."""
         stats = self.fit_statistics(values)
         return stats["n_tot_char"]*stats["avg_log_like_per_char"]
-
-    def _check_zero_links(self):
-        """Debug method."""
-        for link in self.root_links:
-            link.check_zero_links()
 
     def fit_statistics(self, values) -> dict:
         """Get the performance of the regex model on some values.

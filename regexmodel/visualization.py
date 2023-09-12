@@ -7,35 +7,35 @@ except ImportError as e:
     raise ValueError(
         "Please install visualization libraries 'networkx' and 'pyvis'.") from e
 
-from regexmodel.util import Dir
 from regexmodel.model import RegexModel
+from regexmodel.datastructure import RegexNode, Edge
 
 
-def _create_network(graph, link, labels, node_start):
+def _create_network(graph: nx.DiGraph, edge: Edge, labels: list[str], prev_label_id: list[int]
+                    ) -> list[int]:
+    if edge.destination is None:
+        return prev_label_id
+
     cur_i_label = len(labels)
-    if link.destination is None:
-        graph.add_node(cur_i_label, label="X")
-        labels.append("X")
-        if link.direction == Dir.LEFT:
-            graph.add_edge(cur_i_label, node_start, group=link.direction.value)
-        else:
-            graph.add_edge(node_start, cur_i_label, group=link.direction.value)
-        return
-
-    cur_node = link.destination
-    if cur_node.regex is None:
-        cur_label = "X"
+    cur_node = edge.destination
+    if isinstance(cur_node, RegexNode):
+        cur_label = cur_node.regex
     else:
-        cur_label = cur_node.regex.regex
+        cur_label = ""
     graph.add_node(cur_i_label, label=cur_label)
+    for cur_id in prev_label_id:
+        graph.add_edge(cur_id, cur_i_label)
     labels.append(cur_label)
-    if link.direction == Dir.LEFT:
-        graph.add_edge(cur_i_label, node_start, group=link.direction.value)
-    else:
-        graph.add_edge(node_start, cur_i_label, group=link.direction.value)
 
-    for cur_link in cur_node.all_links:
-        _create_network(graph, cur_link, labels, cur_i_label)
+    if isinstance(cur_node, RegexNode):
+        return _create_network(graph, cur_node.next, labels, [cur_i_label])
+
+    all_ends = []
+    for edge in cur_node.edges:  # type: ignore
+        all_ends.extend(_create_network(graph, edge, labels, [cur_i_label]))
+    if cur_node.next.destination is None:
+        return all_ends
+    return _create_network(graph, cur_node.next, labels, all_ends)
 
 
 def regex_model_to_pyvis(model: RegexModel, px_x: str = "1000px", px_y: str = "1000px",
@@ -61,8 +61,8 @@ def regex_model_to_pyvis(model: RegexModel, px_x: str = "1000px", px_y: str = "1
     graph = nx.DiGraph()
     labels = ["s"]
     graph.add_node(0, label="start", group=2)
-    for link in model.root_links:
-        _create_network(graph, link, labels, 0)
+    # for edge in model.root_edges:
+    _create_network(graph, model.regex_edge, labels, [0])
 
     net = Network(px_x, px_y, notebook=notebook, directed=True)
     net.from_nx(graph)
