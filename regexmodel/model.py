@@ -177,10 +177,6 @@ class RegexModel():
                                  "method='fast'.")
         return cls(regex_edge)
 
-    # def check_fitted(self):
-        # if self.regex_edge.count == 0:
-            # raise NotFittedError()
-
     @classmethod
     def from_regex(cls, regex_str: str):
         """Create a regex model from a regex string.
