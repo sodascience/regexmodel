@@ -34,7 +34,7 @@ def run_bench(faker_type, count_thres, n_fake, locale="NL"):
     return all_res
 
 
-def standard_run(out_fp):
+def standard_run(out_fp, method):
     locales = ["nl", "fr", "en", "de", "da"]
     faker_types = ["address", "phone_number", "pricetag", "timezone", "mime_type", "unix_partition",
                    "ascii_email", "isbn10", "job", "ssn", "user_agent", "color", "license_plate",
@@ -59,6 +59,6 @@ def standard_run(out_fp):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise ValueError("Need one argument: output_fp")
-    standard_run(sys.argv[1])
+    if len(sys.argv) != 3:
+        raise ValueError("Need two arguments: output_fp, fit_method")
+    standard_run(sys.argv[1], sys.argv[2])
