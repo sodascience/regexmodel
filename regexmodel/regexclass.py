@@ -287,7 +287,7 @@ def get_class_stat(series: pl.Series, count_thres: int) -> list:
     score_list: list[tuple[BaseRegex, float, pl.Series]] = []
     for rclass in [UpperRegex, LowerRegex, DigitRegex]:
         cur_class_stat = score_single(rclass.base_regex, series, count_thres, rclass.n_possible)
-        if cur_class_stat[0] > 0 and cur_class_stat[1].drop_nulls().len() > count_thres:
+        if cur_class_stat[0] > 0 and cur_class_stat[1].drop_nulls().len() >= count_thres:
             score_list.append((rclass(), *cur_class_stat))
     score_list.extend(LiteralRegex.get_candidates(series, count_thres))
     return sorted(score_list, key=lambda res: -res[1])

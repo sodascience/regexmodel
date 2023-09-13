@@ -13,3 +13,7 @@ def sum_log(log_likes):
     rel_probs = np.exp(log_likes-max_log)
     sum_prob = np.sum(rel_probs)
     return np.log(sum_prob) + max_log
+
+
+class NotFittedError(ValueError):
+    """Signal that the regex could not be fitted."""

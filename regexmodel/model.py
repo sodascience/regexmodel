@@ -7,7 +7,7 @@ from typing import Iterable, Sequence, Union
 import polars as pl
 
 from regexmodel.regexclass import fit_best_regex_class
-from regexmodel.util import sum_log, LOG_LIKE_PER_CHAR
+from regexmodel.util import sum_log, LOG_LIKE_PER_CHAR, NotFittedError
 from regexmodel.datastructure import Edge, OrNode, RegexNode
 # from regexmodel.model import fit_main_branch
 
@@ -22,6 +22,8 @@ def _simplify_edge(edge):
         return edge
     if len(node.edges) == 1:
         return node.edges[0]
+    if node.count == 0:
+        edge.destination = None
     return edge
 
 
@@ -57,11 +59,11 @@ def fit_main_branch(series: pl.Series,
 
     # Add an END edge
     n_end_links = int((series == "").sum())
-    if n_end_links > count_thres:
+    if n_end_links >= count_thres:
         return_node.add_edge(Edge(None, n_end_links))
     cur_series = series.set(series == "", None)  # type: ignore
 
-    while cur_series.drop_nulls().len() > count_thres:
+    while cur_series.drop_nulls().len() >= count_thres:
         result = fit_best_regex_class(cur_series, count_thres, force_merge=force_merge)
 
         # If the regex fails the threshold, stop the search.
@@ -88,7 +90,7 @@ def fit_main_branch(series: pl.Series,
         cur_or_node = OrNode([Edge(None, new_edge.count)], main_edge)
 
         alt_series = result["alt_series"]
-        if alt_series.drop_nulls().len() > count_thres:
+        if alt_series.drop_nulls().len() >= count_thres:
             opt_series = alt_series.str.extract(r"(^[\S\s]*?)" + main_edge.regex + r"$")
             alt_edge = fit_main_branch(opt_series, count_thres, force_merge=force_merge)
             if alt_edge.count > 0:
@@ -168,7 +170,16 @@ class RegexModel():
             force_merge = False
         else:
             force_merge = True
-        return cls(fit_main_branch(values, count_thres=count_thres, force_merge=force_merge))
+        regex_edge = fit_main_branch(values, count_thres=count_thres, force_merge=force_merge)
+        if regex_edge.count == 0:
+            raise NotFittedError(f"Could not fit regex on values, with count_thres={count_thres}"
+                                 f" and method='{method}'. Try lowering count_thres or using "
+                                 "method='fast'.")
+        return cls(regex_edge)
+
+    # def check_fitted(self):
+        # if self.regex_edge.count == 0:
+            # raise NotFittedError()
 
     @classmethod
     def from_regex(cls, regex_str: str):
