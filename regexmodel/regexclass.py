@@ -7,72 +7,12 @@ from abc import ABC, abstractmethod
 from typing import Optional, Iterable
 import re
 from functools import cached_property
-from collections import defaultdict
 
 import numpy as np
 import polars as pl
-from numpy import typing as npt
-
-from regexmodel.util import Dir
 
 
 class BaseRegex(ABC):
-    """Base regex element."""
-
-    prefac: float = 1
-
-    @property
-    def string(self) -> str:
-        """Create a string out of the regex (used for serialization)."""
-        return re.sub(r"\\", r"\\\\", self.regex)
-
-    @abstractmethod
-    def draw(self) -> str:
-        """Draw a string from the regex element."""
-
-    @classmethod
-    @abstractmethod
-    def fit(cls, series, score_thres, direction: Dir):
-        """Fit the regex class to a series of structured strings.
-
-        Parameters
-        ----------
-        series:
-            Series of structured strings.
-        score_thres:
-            Threshold for the fitting score.
-        direction:
-            Fit from the start of the strings if Dir.BOTH or Dir.RIGHT, fit from the end
-            if direction is Dir.LEFT.
-        """
-
-    @abstractmethod
-    def fit_value(self, value: str, direction: Dir) -> Iterable:
-        """Try all possible ways to fit the regex to a single value.
-
-        It yields a tuple of 3 in the case of direction == Dir.BOTH:
-            start_string, probability of generation, end_string
-        else:
-            leftover string, probability of generation.
-        For example if we have the value 12394X, and [0-9]{3,4}, and direction==Dir.BOTH,
-        then we will get: ("", 0.5*10^-3, "94X"), ("", 0.5*10^-4, "4X"), etc.
-        """
-
-    @classmethod
-    @abstractmethod
-    def from_string(cls, regex_str) -> Optional[tuple[BaseRegex, str]]:
-        """Create the regex class from a serialized string.
-
-        It will return None if the string does not belong to the regex class.
-        """
-
-    @property
-    @abstractmethod
-    def regex(self) -> str:
-        """Create a regex to be used for extracting it from a structured string."""
-
-
-class MultiRegex(BaseRegex, ABC):
     """Base class for regex classes that have multiple repeating elements.
 
     Examples: [0-9]{3,4}, [A-Z]{1,2}
@@ -85,211 +25,178 @@ class MultiRegex(BaseRegex, ABC):
         Maximum length of the number of repeating elements.
     """
 
-    _base_regex = r"Some invalid rege\x //"
-    n_possible = 100
+    base_regex = r"Some invalid rege\x //"
+    n_possible = 1
 
     def __init__(self, min_len: int = 1, max_len: int = 1):
         self.min_len = min_len
         self.max_len = max_len
 
+    prefac: float = 1
+
+    @property
+    def string(self) -> str:
+        """Create a string out of the regex (used for serialization)."""
+        return re.sub(r"\\", r"\\\\", self.regex)
+
     @classmethod
-    def fit(cls, series, score_thres, direction: Dir) -> tuple[MultiRegex, float, pl.Series]:
-        if direction == Dir.LEFT:
-            first_elem = series.str.extract(r"(?:[\S\s]*?)*("+cls._base_regex+r"+)$")
-            first_char = first_elem.str.extract(r"[\S\s]*([\S\s])$")
-        else:
-            first_elem = series.str.extract(r"^("+cls._base_regex+r"+)[\S\s]*")
-            first_char = first_elem.str.extract(r"^([\S\s])[\S\s]*")
-        n_unique = len(first_char.drop_nulls().unique())
-        # Score is dependent on number of unique values of first character.
-        score = n_unique/cls.n_possible * (len(series) - first_elem.null_count())/len(series)
+    @abstractmethod
+    def from_string(cls, regex_str: str) -> Optional[tuple[BaseRegex, str]]:
+        """Create the regex class from a serialized string.
 
-        # Calculate the min_len and max_len using the score_thres.
-        lengths = first_elem.str.lengths().drop_nulls().to_numpy()
-        if len(lengths) == 0:
-            lengths = np.array([1])
-        unq_len, counts = np.unique(lengths, return_counts=True)
-        cum_score = np.cumsum(counts)/len(series)
-        try:
-            i_min_len = np.where(cum_score >= score_thres)[0][0]
-        except IndexError:
-            i_min_len = 0
-        try:
-            i_max_len = np.where(
-                cum_score >= len(first_elem.drop_nulls())/len(series)-score_thres)[0][0]
-        except IndexError:
-            i_max_len = i_min_len
-        if i_min_len > i_max_len:
-            i_min_len = 0
-            i_max_len = len(unq_len)-1
-        min_len = unq_len[i_min_len]
-        max_len = unq_len[i_max_len]
+        It will return None if the string does not belong to the regex class.
+        """
 
-        # Create an instance and return the score and the resulting series.
-        instance = cls(min_len, max_len)
-        if direction == Dir.LEFT:
-            new_series = series.str.extract(r"([\S\s]*?)"+instance.regex+r"$")
-        else:
-            new_series = series.str.extract(r"^"+instance.regex+r"([\S\s]*)")
+    @staticmethod
+    def get_class_length(regex_str: str):
+        """Get the min and max length of the regex string."""
+        res = re.search(r"(?:{(\d+),(\d+)})?", regex_str)
+        if res is None:  # should never fire.
+            raise ValueError("Cannot get class length.")
+        if res.groups()[0] is None:
+            return (1, 1), regex_str
+        regex_len = len("".join(res.groups())) + 3
+        return (int(x) for x in res.groups()), regex_str[regex_len:]
 
-        return instance, score, new_series
-
-    @cached_property
-    def _center_regexes(self):
-        """A dictionary for compiled regexes for all possible lengths."""
-        return {
-            cur_len: re.compile(r"^" + self._base_regex + r"{" + str(cur_len) + r"}")
-            for cur_len in range(self.min_len, self.max_len+1)
-        }
-
-    def fit_value(self, value: str, direction: Dir) -> Iterable:
-        if direction == Dir.BOTH:
-            return self._fit_value_center(value)
-        if direction == Dir.LEFT:
-            return self._fit_value_left(value)
-        return self._fit_value_right(value)
-
-    def _fit_value_center(self, value: str):
-        """Fit value in case direction == Dir.BOTH."""
-        for i_val in range(len(value)):
-            for i_len in range(self.min_len, self.max_len+1):
-                res = self._center_regexes[i_len].match(value[i_val:])
-                if res is not None:
-                    yield (value[:i_val], self._draw_probability(i_len), value[i_val+i_len:])
-
-    def _fit_value_left(self, value: str):
-        """Fit value in case direction == Dir.LEFT."""
-        for i_len in range(self.min_len, self.max_len+1):
-            res = self._center_regexes[i_len].match(value[::-1])
-            if res is not None:
-                yield (value[:-i_len], self._draw_probability(i_len))
-
-    def _fit_value_right(self, value: str):
-        """Fit value in case direction == Dir.RIGHT."""
-        for i_len in range(self.min_len, self.max_len+1):
-            res = self._center_regexes[i_len].match(value)
-            if res is not None:
-                yield (value[i_len:], self._draw_probability(i_len))
-
-    def _draw_probability(self, digit_len):
-        """Probability to draw a certain string with length digit_len."""
-        return self.n_possible**-digit_len/(self.max_len-self.min_len+1)
+    def draw(self):
+        """Draw a string from the regex element."""
+        n_draw = np.random.randint(self.min_len, self.max_len+1)
+        return "".join(self.draw_once() for _ in range(n_draw))
 
     @property
     def regex(self):
         """Regex for retrieving elements with the regex class."""
-        return self._base_regex + r"{" + f"{self.min_len},{self.max_len}" + r"}"
+        if self.min_len == 1 and self.max_len == 1:
+            return r"[" + self.base_regex + r"]"
+        return r"[" + self.base_regex + r"]{" + f"{self.min_len},{self.max_len}" + "}"
+
+    @abstractmethod
+    def covers(self, regex: BaseRegex) -> bool:
+        """Check whether self covers another regex.
+
+        For example, [A-Z] covers [S], but [0-9] does not cover [a].
+        """
+
+    def extract_first_elem(self, series: pl.Series) -> pl.Series:
+        """Get the values that are matched to the regex."""
+        return series.str.extract(r"^(" + self.regex + r")[\S\s]*")
+
+    def extract_after_first(self, series) -> pl.Series:
+        """Get a new series after fitting the regex."""
+        return series.str.extract(r"^" + self.regex + r"([\S\s]*)$")
 
     def __repr__(self):
         return self.__class__.__name__ + self.regex
-
-    def draw(self):
-        n_draw = np.random.randint(self.min_len, self.max_len+1)
-        return "".join(self.draw_once() for _ in range(n_draw))
 
     @abstractmethod
     def draw_once(self) -> str:
         """Draw a single character from the multi regex."""
 
+    @property
+    def n_param(self) -> int:
+        """Number of parameters for the regex class."""
+        return 1
+
+    def _draw_probability(self, digit_len: int):
+        """Probability to draw a certain string with length digit_len."""
+        return float(self.n_possible)**-digit_len/(self.max_len-self.min_len+1)
+
+    @cached_property
+    def _center_regexes(self) -> dict:
+        """A dictionary for compiled regexes for all possible lengths."""
+        return {
+            cur_len: re.compile(r"^[" + self.base_regex + r"]{" + str(cur_len) + r"}")
+            for cur_len in range(self.min_len, self.max_len+1)
+        }
+
+    def fit_value(self, value: str) -> Iterable:
+        """Try all possible ways to fit the regex to a single value.
+
+        It yields a tuple of the new value and the probabilities.
+        For example if we have the value 12394X, and [0-9]{3,4},
+        then we will get: (0.5*10^-3, "94X"), (0.5*10^-4, "4X"), etc.
+        """
+        for i_len in range(self.min_len, self.max_len+1):
+            res = self._center_regexes[i_len].match(value)
+            if res is not None:
+                yield (value[i_len:], self._draw_probability(i_len))
+
+
+class CharClassRegex(BaseRegex, ABC):
+    """Base class for regex classes that have multiple repeating elements.
+
+    Examples: [0-9]{3,4}, [A-Z]{1,2}
+
+    Parameters
+    ----------
+    min_len:
+        Minimum length of the number of repeating elements.
+    max_len:
+        Maximum length of the number of repeating elements.
+    """
+
+    n_possible = 100
+    all_possible = ""
+
+    def draw_once(self):
+        return random.choice(self.all_possible)
+
+    def covers(self, regex: BaseRegex) -> bool:
+        if isinstance(regex, LiteralRegex):
+            for literal in regex.literals:
+                if literal not in self.all_possible:
+                    return False
+            return True
+        return False
+
     @classmethod
-    def from_string(cls, regex_str) -> Optional[tuple[MultiRegex, str]]:
-        # It used to be, but changed for compatibility: r"(?>{(\d+),(\d+)})?"
-        search_regex = r"^" + re.escape(cls._base_regex) + r"(?:{(\d+),(\d+)})?"
-        res = re.search(search_regex, regex_str)
-        if res is None:
-            return None
-        if res.groups()[0] is None:
-            return cls(), regex_str[len(cls._base_regex):]
-        regex_len = len("".join(res.groups())) + len(cls._base_regex) + 3
-        return cls(*[int(x) for x in res.groups()]), regex_str[regex_len:]
+    def from_string(cls, regex_str: str) -> Optional[tuple[BaseRegex, str]]:
+        return None
 
 
-class UpperRegex(MultiRegex):
+class UpperRegex(CharClassRegex):
     """Regex class that produces upper case characters."""
 
-    _base_regex = r"[A-Z]"
+    base_regex = r"A-Z"
     prefac = 0.25
     n_possible = 26
+    all_possible = string.ascii_uppercase
 
-    def draw_once(self):
-        return random.choice(string.ascii_uppercase)
+    @classmethod
+    def from_string(cls, regex_str) -> Optional[tuple[BaseRegex, str]]:
+        if regex_str[:3] == cls.base_regex:
+            return cls(), regex_str[3:]
+        return None
 
 
-class LowerRegex(MultiRegex):
+class LowerRegex(CharClassRegex):
     """Regex class that produces lower case characters."""
 
-    _base_regex = r"[a-z]"
+    base_regex = r"a-z"
     prefac = 0.25
     n_possible = 26
+    all_possible = string.ascii_lowercase
 
-    def draw_once(self):
-        return random.choice(string.ascii_lowercase)
+    @classmethod
+    def from_string(cls, regex_str) -> Optional[tuple[BaseRegex, str]]:
+        if regex_str[:3] == cls.base_regex:
+            return cls(), regex_str[3:]
+        return None
 
 
-class DigitRegex(MultiRegex):
+class DigitRegex(CharClassRegex):
     """Regex class that produces digits."""
 
-    _base_regex = r"[0-9]"
+    base_regex = r"0-9"
     prefac = 0.5
     n_possible = 10
+    all_possible = string.digits
 
-    def draw_once(self):
-        return str(np.random.randint(10))
-
-
-def _check_literal_compatible(unq_char: Optional[str],
-                              counts: Optional[npt.NDArray[np.int_]],
-                              unq_char_added: npt.NDArray[np.string_],
-                              counts_added: npt.NDArray[np.int_]):
-    """Check whether to add a new literal to the current set of literals.
-
-    It does so by looking ahead at the character after the current one.
-    If the distribution of second characters for the current set of literals
-    is similar enough to the distribution for the candidate literal, then return
-    True, otherwise return false.
-
-    This heuristic could use some study/work.
-    """
-    if unq_char is None or counts is None:
-        return True
-    tot_counts = np.sum(counts)
-    tot_counts_added = np.sum(counts_added)
-    # Convert both counts/characters to dictionary.
-    orig_dict = {unq_char[i]: counts[i] for i in range(len(counts))}
-    add_dict = {unq_char_added[i]: counts_added[i] for i in range(len(counts_added))}
-
-    for char in (set(add_dict) | set(orig_dict)):
-        if char in orig_dict:
-            # Compute the expected count and bounds for the candidate
-            expected_count = (orig_dict[char]/tot_counts)*tot_counts_added
-            min_bound = round(expected_count-np.sqrt(len(unq_char)*expected_count)-1)
-            max_bound = round(expected_count+np.sqrt(len(unq_char)*expected_count)+1)
-            if char not in add_dict and min_bound > 0:
-                return False
-            if char not in add_dict:
-                continue
-            if add_dict[char] < min_bound or add_dict[char] > max_bound:
-                return False
-        else:
-            # A new character should not have too high a count.
-            if add_dict[char] >= np.sqrt(len(unq_char)) + 1:
-                return False
-    return True
-
-
-def _add_literal_compatible(unq_char: Optional[str],
-                            counts: Optional[npt.NDArray[np.int_]],
-                            unq_char_added: npt.NDArray[np.string_],
-                            counts_added: npt.NDArray[np.int_]):
-    """Merge the characters and counts of multiple classes."""
-    if unq_char is None or counts is None:
-        return unq_char_added, counts_added
-    data: dict[str, int] = defaultdict(lambda: 0)
-    for i_char, char in enumerate(unq_char):
-        data[char] += counts[i_char]
-    for i_char, char in enumerate(unq_char_added):
-        data[char] += counts_added[i_char]
-    return np.array(list(data.keys())), np.array(list(data.values()))
+    @classmethod
+    def from_string(cls, regex_str) -> Optional[tuple[BaseRegex, str]]:
+        if regex_str[:3] == cls.base_regex:
+            return cls(), regex_str[3:]
+        return None
 
 
 def _unescape(regex_str: str) -> str:
@@ -304,90 +211,226 @@ class LiteralRegex(BaseRegex):
     ----------
     literals:
         List of all character that can be created using this regex class.
-        This is not limited to ASCII characters.
+        This is not limited to ASCII characters. These literals are not escaped.
     """
 
-    def __init__(self, literals: list[str]):
+    def __init__(self, literals: list[str], min_len: int = 1, max_len: int = 1):
         self.literals = list(set(literals))
-
-    @classmethod
-    def fit(cls, series, score_thres, direction: Dir):
-        # Get the first and second characters.
-        if direction == Dir.LEFT:
-            first_elem = series.str.extract(r"[\S\s]*([\S\s])$")
-            second_elem = series.str.extract(r"[\S\s]*([\S\s])[\S\s]$")
-        else:
-            first_elem = series.str.extract(r"^([\S\s])[\S\s]*")
-            second_elem = series.str.extract(r"^[\S\s]([\S\s])[\S\s]*")
-
-        # Find out which characters come up often and meet the score threshold.
-        unq_char, counts = np.unique(first_elem.drop_nulls().to_numpy(), return_counts=True)
-        thres_char = unq_char[counts/len(series) >= score_thres]
-        thres_count = counts[counts/len(series) >= score_thres]
-        cur_tot_counts = None
-        cur_tot_chars = None
-        use_chars = []
-        for i_char in np.argsort(-thres_count):
-            cur_char = thres_char[i_char]
-            cur_second_elem = second_elem.filter(first_elem == cur_char)
-            second_char, second_count = np.unique(cur_second_elem.drop_nulls().to_numpy(),
-                                                  return_counts=True)
-            if _check_literal_compatible(cur_tot_chars, cur_tot_counts, second_char, second_count):
-                cur_tot_chars, cur_tot_counts = _add_literal_compatible(
-                    cur_tot_chars, cur_tot_counts, second_char, second_count)
-                use_chars.append(cur_char)
-
-        # Create the instance and return the score/resulting series.
-        if len(use_chars) == 0:
-            use_chars = ["X"]
-        instance = cls(use_chars)
-        if direction == Dir.LEFT:
-            new_series = series.str.extract(r"([\S\s]*)" + instance.regex + r"$")
-        else:
-            new_series = series.str.extract(r"^" + instance.regex + r"([\S\s]*)")
-        score = (1/len(use_chars))*(new_series.drop_nulls().len()/len(series))
-
-        return instance, score, new_series
-
-    def __repr__(self):
-        return f"Literal [{''.join(self.literals)}]"
+        super().__init__(min_len, max_len)
 
     @property
-    def regex(self):
-        return r"[" + "".join(re.escape(x) if x not in [" "] else x for x in self.literals) + r"]"
+    def base_regex(self):
+        """Base regex to be used for regex matching."""
+        return "".join(re.escape(x) if x not in [" "] else x for x in self.literals)
 
-    def draw(self):
-        return np.random.choice(self.literals)
+    @property
+    def n_possible(self):
+        """Number of possibilities."""
+        return len(self.literals)
 
-    def fit_value(self, value: str, direction: Dir) -> Iterable:
-        if len(value) == 0:
-            return
-        if direction == Dir.BOTH:
-            for i_val, cur_char in enumerate(value):
-                if cur_char in self.literals:
-                    yield (value[:i_val], 1/len(self.literals), value[i_val+1:])
-        elif direction == Dir.LEFT:
-            if value[-1] in self.literals:
-                yield (value[:-1], 1/len(self.literals))
-        elif value[0] in self.literals:
-            yield (value[1:], 1/len(self.literals))
+    def covers(self, regex):
+        return False
 
     @classmethod
-    def from_string(cls, regex_str) -> Optional[tuple[LiteralRegex, str]]:
-        # Find first unescaped ']'
-        end_index = None
-        for match in re.finditer(r"\]", regex_str):
-            start = match.span()[0]-2
-            if start < 0:
-                continue
-            if regex_str[start:start+3] != r"\\]":
-                end_index = start+3
-                break
-        if end_index is None or regex_str[0] != r"[":
-            return None
+    def get_candidates(cls, series: pl.Series, count_thres: int
+                       ) -> Iterable[tuple[LiteralRegex, float, pl.Series]]:
+        """Get all possible candidate literal regexes.
 
-        literals = list(_unescape(regex_str[1:end_index-1]))
-        return cls(literals), regex_str[end_index:]
+        Arguments
+        ---------
+        series:
+            Series to create candidates for.
+        count_thres:
+            Threshold for how many times the candidate must be present.
+
+        Returns
+        -------
+            Generator for a tuple that contains the literal regex, score and new
+            series that results from choosing that literal regex.
+        """
+        first_elem = series.str.extract(r"^([\S\s])[\S\s]*")
+        unq_char, counts = np.unique(first_elem.drop_nulls().to_numpy(), return_counts=True)
+        thres_char = unq_char[counts >= count_thres]
+        for cur_char in thres_char:
+            next_series = series.str.extract(r"^" + cls(cur_char).regex + r"([\S\s]*)")
+            avg_len = next_series.drop_nulls().str.lengths().mean()
+
+            n_not_null = len(series) - next_series.null_count()
+            avg_len = next_series.drop_nulls().str.lengths().mean()
+            if avg_len is None:
+                split_penalty = 1
+            else:
+                expected_finish = 0.7**avg_len*n_not_null
+                split_penalty = 1/(1 + np.exp(2*(count_thres - expected_finish)/count_thres))
+            yield (cls(cur_char), split_penalty*n_not_null/len(series), next_series)
+
+    def __repr__(self):
+        return f"Literal [{self.base_regex}]"
+
+    def draw_once(self):
+        return np.random.choice(self.literals)
+
+    @classmethod
+    def from_string(cls, regex_str) -> Optional[tuple[BaseRegex, str]]:
+        if len(regex_str) > 1 and regex_str[0] == "\\":
+            return cls([_unescape(regex_str[1])]), regex_str[2:]
+        if len(regex_str) >= 1 and regex_str[0] != "\\":
+            return cls([_unescape(regex_str[0])]), regex_str[1:]
+        return None
+
+
+def get_class_stat(series: pl.Series, count_thres: int) -> list:
+    """Find all possible regex elements that can fit the series.
+
+    Then sort them so that the first one is the best fit.
+    """
+    score_list: list[tuple[BaseRegex, float, pl.Series]] = []
+    for rclass in [UpperRegex, LowerRegex, DigitRegex]:
+        cur_class_stat = score_single(rclass.base_regex, series, count_thres, rclass.n_possible)
+        if cur_class_stat[0] > 0 and cur_class_stat[1].drop_nulls().len() > count_thres:
+            score_list.append((rclass(), *cur_class_stat))
+    score_list.extend(LiteralRegex.get_candidates(series, count_thres))
+    return sorted(score_list, key=lambda res: -res[1])
+
+
+def _get_bounds(key: str, count_dict: dict[str, int], count_thres: int,
+                sigma: float, tot_counts: int) -> tuple[float, float]:
+    if tot_counts == 0:
+        return 0, 1
+    count = count_dict.get(key, 0)
+    rel_delta = sigma*np.sqrt(max(count_thres/2, count))/tot_counts
+    rel_delta = max(0.15, rel_delta)
+    if key in count_dict:
+        lower_bound = count/tot_counts - rel_delta
+        upper_bound = count/tot_counts + rel_delta
+    else:
+        lower_bound = 0
+        upper_bound = (count_thres/2)/tot_counts + rel_delta
+    return lower_bound, upper_bound
+
+
+def _check_stat_compatible(stat_a: list, tot_a: int, stat_b: list, tot_b: int,
+                           count_thres: int, sigma: float = 2.0) -> bool:
+    dict_stat_a = {regex.base_regex: len(series)-series.null_count()
+                   for regex, _score, series in stat_a}
+    dict_stat_b = {regex.base_regex: len(series)-series.null_count()
+                   for regex, _score, series in stat_b}
+    for key in (set(dict_stat_a) | set(dict_stat_b)):
+        lower_a, upper_a = _get_bounds(key, dict_stat_a, count_thres, sigma, tot_a)
+        lower_b, upper_b = _get_bounds(key, dict_stat_b, count_thres, sigma, tot_b)
+        if lower_a > upper_b or lower_b > upper_a:
+            return False
+    return True
+
+
+class OrRegex(CharClassRegex):
+    """Regex element that contains multiple regex elements.
+
+    For example, a combination of A-Z and a-z to create [a-zA-Z].
+
+    Arguments
+    ---------
+    regex_instances:
+        List of base regexes to choose between.
+    min_len:
+        Minimum number of repeats.
+    max_len:
+        Maximum number of repeats.
+    """
+
+    def __init__(self, regex_instances: list[BaseRegex], min_len: int = 1, max_len: int = 1):
+        self._regex_instances = list(regex_instances)
+        super().__init__(min_len, max_len)
+
+    @property
+    def n_possible(self):
+        """Number of possibilities for all sub regex elements."""
+        return np.sum([rc.n_possible for rc in self._regex_instances])
+
+    @property
+    def base_regex(self):
+        """Base regex for all subregexes."""
+        return "".join(rc.base_regex for rc in self._regex_instances)
+
+    @property
+    def n_param(self) -> int:
+        return np.sum([inst.n_param for inst in self._regex_instances]).astype(int)
+
+    def draw_once(self) -> str:
+        prob = np.array([inst.n_possible for inst in self._regex_instances])
+        prob = prob/np.sum(prob)
+        chosen_inst = np.random.choice(self._regex_instances, p=prob)  # type: ignore
+        return chosen_inst.draw_once()
+
+    def covers(self, regex: BaseRegex) -> bool:
+        for inst in self._regex_instances:
+            if inst.covers(regex):
+                return True
+        return False
+
+    def append(self, regex: BaseRegex):
+        """Add another regex element."""
+        self._regex_instances.append(regex)
+
+    @property
+    def first_regex(self):
+        """Get the first of the regex elements."""
+        return self._regex_instances[0]
+
+    def check_compatibility(self, series: pl.Series, count_thres: int) -> bool:
+        """Check whether the regex elements are compatible with each other."""
+        if len(self._regex_instances) == 1:
+            return True
+        base_regex = self._regex_instances[0]
+        base_series = base_regex.extract_after_first(series)
+        base_stat = get_class_stat(base_series, count_thres)
+        for cur_regex in self._regex_instances[1:]:
+            cur_new_series = cur_regex.extract_after_first(series)
+            cur_class_stat = get_class_stat(cur_new_series, count_thres)
+            base_tot = len(series) - base_series.null_count()
+            cur_tot = len(series) - cur_new_series.null_count()
+            compatible = _check_stat_compatible(base_stat, base_tot, cur_class_stat, cur_tot,
+                                                count_thres)
+            if not compatible:
+                return False
+        return True
+
+    @classmethod
+    def from_string(cls, regex_str):
+        rex = r"^\[([\S\s]*?[^\\])\]"
+        options = re.search(rex, regex_str).group(1)
+        new_regex_str = regex_str[len(options)+2:]
+        inner_str = _unescape(options)
+        all_regex = []
+        while len(inner_str) > 0:
+            last_inner = inner_str
+            for regex_class in ALL_REGEX_CLASS:
+                ret = regex_class.from_string(inner_str)
+                if ret is not None:
+                    cur_regex, inner_str = ret
+                    all_regex.append(cur_regex)
+                    break
+            if inner_str == last_inner:
+                return None
+
+        (min_len, max_len), new_regex_str = cls.get_class_length(new_regex_str)
+        return cls(all_regex, min_len, max_len), new_regex_str
+
+
+def score_single(regex: str, series: pl.Series, count_thres: int, n_possible: int
+                 ) -> tuple[float, pl.Series]:
+    """Get the score for the [A-Z, a-z, 0-9] regex classes."""
+    next_series = series.str.extract(r"^[" + regex + r"]([\S\s]*)$")
+    first_char = series.str.extract(r"^([" + regex + r"])[\S\s]*$")
+    n_not_null = len(series) - next_series.null_count()
+    n_unique = len(first_char.drop_nulls().unique())
+    avg_len = next_series.drop_nulls().str.lengths().mean()
+    if avg_len is None:
+        split_penalty = 1
+    else:
+        expected_finish = 0.7**avg_len*n_not_null
+        split_penalty = 1/(1 + np.exp(2*(count_thres - expected_finish)/count_thres))
+    return split_penalty*n_unique/n_possible*n_not_null/len(series), next_series
 
 
 # All regex classes available, order matters.
@@ -423,31 +466,100 @@ def regex_list_from_string(regex_str) -> list[BaseRegex]:
     return all_regexes
 
 
-def fit_best_regex_class(series: pl.Series, score_thres: float,
-                         direction: Dir = Dir.RIGHT) -> dict:
-    """Find the optimal regex class for this series.
+def _preview(series):
+    return series.drop_nulls()[:3].to_numpy()
 
-    Parameters
-    ----------
+
+def fit_best_regex_class(series: pl.Series, count_thres: int,
+                         force_merge: bool = False) -> Optional[dict]:
+    """Fit the best regex class.
+
+    This function is the main workhorse to fit the currently best (combination of)
+    regex element.
+
+    Arguments
+    ---------
     series:
-        Series to fit regex classes for.
-    score_thres:
-        Score threshold for selection.
-    direction:
-        Direction of the fit.
+        Series to be fit with regex elements.
+    count_thres:
+        Threshold for how many values need to use the regex.
+    force_merge:
+        Whether to try harder to use multiple regex elements in an OR fashion.
+        If true, this results in generally faster but worse performance.
 
     Returns
     -------
-        Dictionary with score, regex, and new_series.
+        Dictionary containing the score/regex/series if regex is used and
+        series for all values that haven't used the regex.
     """
-    best_regex = {"score": -1}
-    for regex_class in ALL_REGEX_CLASS:
-        regex_inst, score, new_series = regex_class.fit(
-            series, score_thres=score_thres, direction=direction)
-        if score > best_regex["score"]:
-            best_regex = {
-                "score": score,
-                "regex": regex_inst,
-                "new_series": new_series,
-            }
-    return best_regex
+    # Get a ranking for all regex possibilities
+    class_stat = get_class_stat(series, count_thres)
+    if len(class_stat) == 0:
+        return None
+    cur_best_regex, best_score, cur_best_series = class_stat[0]
+    cur_best_regex = OrRegex([cur_best_regex])
+    cur_series = series.set(cur_best_series.is_not_null(), None)  # type: ignore
+
+    # Attempt to combine the regex element with the highest score with the other candidates.
+    for cur_regex, _score, _ in class_stat[1:]:
+        if cur_best_regex.covers(cur_regex):
+            continue
+
+        new_cur_series = cur_regex.extract_after_first(cur_series)
+
+        cur_non_null = len(series) - new_cur_series.null_count()
+        if cur_non_null < count_thres:
+            continue
+        cur_new_class_stat = get_class_stat(new_cur_series, count_thres)
+        best_new_class_stat = get_class_stat(cur_best_series, count_thres)
+
+        # Check whether the look-one-ahead distributions are similar enough.
+        best_count = len(series) - cur_best_series.null_count()
+        cur_count = len(series) - new_cur_series.null_count()
+        compatible = _check_stat_compatible(best_new_class_stat, best_count,
+                                            cur_new_class_stat, cur_count, count_thres)
+        if compatible:
+            cur_best_regex.append(cur_regex)
+        cur_series = cur_series.set(new_cur_series.is_not_null(), None)  # type: ignore
+
+    # Find the min_length and max_length for the regex class.
+    cur_series = series
+    cur_series = cur_best_regex.extract_after_first(series)
+    start_non_null = len(series) - cur_series.null_count()
+    i_start = None
+    i_end = None
+    for cur_i in range(1, 100):
+
+        compatible = cur_best_regex.check_compatibility(cur_series, count_thres)
+        cur_series = cur_best_regex.extract_after_first(cur_series)
+        cur_non_null = len(cur_series) - cur_series.null_count()
+
+        if not compatible or cur_non_null < count_thres:
+            if i_start is None:
+                i_start = cur_i
+            i_end = cur_i
+            break
+
+        if cur_non_null < start_non_null - count_thres and i_start is None:
+            i_start = cur_i
+
+    # This should not happen
+    if i_end is None:
+        i_end = 100
+
+    # Keep one character classes not together by default.
+    if i_end == 1 and i_start == 1 and not force_merge:
+        cur_best_regex = cur_best_regex.first_regex
+
+    cur_best_regex.min_len = i_start
+    cur_best_regex.max_len = i_end
+
+    new_series = cur_best_regex.extract_after_first(series)
+    alt_series = series.set(new_series.is_not_null(), None)  # type: ignore
+
+    return {
+        "score": best_score,
+        "regex": cur_best_regex,
+        "new_series": new_series,
+        "alt_series": alt_series,
+    }

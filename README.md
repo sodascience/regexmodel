@@ -17,6 +17,12 @@ Features:
 You can install regexmodel using pip:
 
 ```bash
+pip install regexmodel
+```
+
+If you want the latest version of git, use:
+
+```bash
 pip install git+https://github.com/sodascience/regexmodel.git
 ```
 
@@ -33,11 +39,14 @@ Fitting the regexmodel is as simple as:
 ```python
 from regexmodel import RegexModel
 
-model = RegexModel.fit(your_values_to_fit, count_thres=10)
+model = RegexModel.fit(your_values_to_fit, count_thres=10, method="accurate")
 ```
 
 The `count_thres` parameter changes how detailed and time consuming the fit is. A higher threshold means
 a shorter time to fit, but also a worse fit.
+
+The `method` parameter determines the performance/how fast the model is trained. For better looking results,
+the "accurate" method is advised. If the quickness of the fit is more important, then you can use the "fast" method. The "accurate" method is generally slow with very long/branching/unstructured strings.
 
 Then synthesizing a new value is done with:
 

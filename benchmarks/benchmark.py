@@ -8,10 +8,10 @@ import sys
 
 from faker import Faker
 
-from regexmodel import RegexModel
+from regexmodel.model import RegexModel
 
 
-def run_bench(faker_type, count_thres, n_fake, locale="NL"):
+def run_bench(faker_type, count_thres, n_fake, locale="NL", method="accurate"):
     fake = Faker(locale=locale)
     Faker.seed(12345)
     fake_data = [getattr(fake, faker_type)() for _ in range(max(n_fake))]
@@ -21,7 +21,7 @@ def run_bench(faker_type, count_thres, n_fake, locale="NL"):
     for cur_n_fake in n_fake:
         for cur_count_thres in count_thres:
             start_time = time.time()
-            model = RegexModel.fit(fake_data[:cur_n_fake], cur_count_thres)
+            model = RegexModel.fit(fake_data[:cur_n_fake], cur_count_thres, method=method)
             mid_time = time.time()
             stats = model.fit_statistics(fake_data_2[:cur_n_fake])
             end_time = time.time()
@@ -34,7 +34,7 @@ def run_bench(faker_type, count_thres, n_fake, locale="NL"):
     return all_res
 
 
-def standard_run(out_fp):
+def standard_run(out_fp, method):
     locales = ["nl", "fr", "en", "de", "da"]
     faker_types = ["address", "phone_number", "pricetag", "timezone", "mime_type", "unix_partition",
                    "ascii_email", "isbn10", "job", "ssn", "user_agent", "color", "license_plate",
@@ -47,7 +47,7 @@ def standard_run(out_fp):
     for cur_faker_type in faker_types:
         for cur_locale in locales:
             future_results[cur_faker_type][cur_locale] = executor.submit(
-                run_bench, cur_faker_type, count_thres, n_fake, locale=cur_locale)
+                run_bench, cur_faker_type, count_thres, n_fake, locale=cur_locale, method=method)
 
     results = {
         cur_faker_type: {locale: locale_data.result()
@@ -59,6 +59,6 @@ def standard_run(out_fp):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise ValueError("Need one argument: output_fp")
-    standard_run(sys.argv[1])
+    if len(sys.argv) != 3:
+        raise ValueError("Need two arguments: output_fp, fit_method")
+    standard_run(sys.argv[1], sys.argv[2])
