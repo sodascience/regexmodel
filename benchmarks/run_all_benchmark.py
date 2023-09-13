@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import sys
 import json
 from pathlib import Path
 
@@ -8,7 +9,10 @@ from create_dataframe import create_dataframe
 
 
 if __name__ == "__main__":
-    for regex_method in ["accurate", "fast"]:
+    all_regex_method = ["accurate", "fast"]
+    if len(sys.argv) == 2:
+        all_regex_method = [sys.argv[1]]
+    for regex_method in all_regex_method:
         output_dir = Path(regex_method)
         output_dir.mkdir(exist_ok=True)
         bench_fp = output_dir/"benchmark.json"
