@@ -1,20 +1,10 @@
 """Utilities for the regex model."""
-from enum import Enum
-
 import numpy as np
 
 
 # Used for log likelihood estimation to signify this branch isn't used (for that particular string).
 UNVIABLE_REGEX = -1000000
 LOG_LIKE_PER_CHAR = np.log(1e-3)
-
-
-class Dir(Enum):
-    """Direction of links."""
-
-    LEFT = 1  # Backward direction
-    RIGHT = 2  # Forward direction
-    BOTH = 3  # Both directions
 
 
 def sum_prob_log(probs, log_likes):

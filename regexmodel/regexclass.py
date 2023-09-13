@@ -64,9 +64,11 @@ class BaseRegex(ABC):
         return "".join(self.draw_once() for _ in range(n_draw))
 
     @property
-    def regex(self) -> str:
+    def regex(self):
         """Regex for retrieving elements with the regex class."""
-        return r"[" + self.base_regex + r"]{" + f"{self.min_len},{self.max_len}" + r"}"
+        if self.min_len == 1 and self.max_len == 1:
+            return r"[" + self.base_regex + r"]"
+        return r"[" + self.base_regex + r"]{" + f"{self.min_len},{self.max_len}" + "}"
 
     @abstractmethod
     def covers(self, regex: BaseRegex) -> bool:

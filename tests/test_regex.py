@@ -1,67 +1,38 @@
-import string
-from random import choice
-
-import numpy as np
-from pytest import mark, raises
-
+from pytest import mark
 
 from regexmodel import RegexModel
-from regexmodel.regexclass import LiteralRegex, DigitRegex
-from regexmodel.util import Dir
 
 
-def test_regex_single_digit():
-    series = ["R123", "R837", "R354", "R456", "R578", "R699"]
-    dist = RegexModel.fit(series)
+@mark.parametrize("series,regex,counts", [
+        (["R123", "R837", "R354", "R456", "R578", "R699"], r"[R][0-9]{3,3}",
+            [6, 6, 6]),
+        (["A123", "B123", "C123", "D123", "E123", "F123"], r"[A-Z][1][2][3]",
+            [6, 6, 6, 6, 6]),
+        (["123a", "123b", "123c", "123d", "123e", "123f"], r"[1][2][3][a-z]",
+            [6, 6, 6, 6, 6]),
+        # (["1a3f", "b2af", "22b2", "ac2e", "5f2a", "45e3", "c23f", "de2d", "3a43"], r"[0-9a-z]{4,4}"),
+        (["abc", "edf", "abc", "edf", "abc", "abc", "abc"], r"([a][b][c]|[e][d][f])",
+            [[[5, 5, 5, 5], [2, 2, 2, 2]], 0]),
+        # (["s123", "s345", "871", "231", "462", "720"], r"(|s)[0-9]{3,3}")
+    ])
+def test_full_pipeline(series, regex, counts):
+    model = RegexModel.fit(series, count_thres=1)
+    assert model.regex == regex
+    assert model.serialize()["counts"] == counts
+    new_series = [model.draw() for _ in range(100)]
+    new_model = RegexModel.fit(new_series, count_thres=1)
+    assert new_model.regex == model.regex
+    new_model = RegexModel(model.serialize())
+    assert new_model.regex == model.regex
+    assert new_model.serialize()["counts"] == model.serialize()["counts"]
 
-    def check_regex_dist(dist):
-        assert len(dist.root_links) == 1
-        assert dist.root_links[0].count == 6
-        assert dist.root_links[0].count == 6
-        first_node = dist.root_links[0].destination
-        assert isinstance(first_node.regex, LiteralRegex)
-        assert first_node.regex.string == r"[R]"
-        assert len(first_node.sub_links) == 1
-        assert first_node.sub_links[0].count == 6
-        assert first_node.sub_links[0].destination is None
-        assert first_node.sub_links[0].direction == Dir.LEFT
-        assert first_node.main_link.count == 6
-        assert first_node.main_link.direction == Dir.RIGHT
+    # Test whether adding one non-conforming value and setting count_thres == 2
+    # will ignore the added value.
+    series.append("A123")
+    new_model.fit(series, count_thres=2)
+    assert model.regex == new_model.regex
+    assert new_model.serialize()["counts"] == model.serialize()["counts"]
 
-        second_node = first_node.main_link.destination
-        assert isinstance(second_node.regex, DigitRegex)
-        assert second_node.regex.string == r"[0-9]{3,3}"
-        assert len(second_node.sub_links) == 1
-        assert second_node.sub_links[0].count == 6
-        assert second_node.sub_links[0].direction == Dir.RIGHT
-        assert second_node.sub_links[0].destination is None
-        assert second_node.main_link.count == 0
-        assert second_node.main_link.direction == Dir.RIGHT
-        assert second_node.main_link.destination is None
-
-        for draw_str in [dist.draw() for _ in range(10)]:
-            assert len(draw_str) == 4
-            assert draw_str[0] == "R"
-
-    check_regex_dist(dist)
-
-    regex_data = dist.serialize()
-    new_dist = RegexModel(regex_data)
-    check_regex_dist(new_dist)
-    print(-len(series)*3*np.log(10), dist.log_likelihood(series))
-    assert np.isclose(-len(series)*3*np.log(10), dist.log_likelihood(series))
-
-# @mark.parametrize("series_type", [pd.Series, pl.Series])
-# def test_regex_unique(series_type):
-#     series = series_type(["R1", "R2", "R3", "R4", "R5", "R6"])
-#     dist = UniqueRegexDistribution.fit(series)
-#     values = [dist.draw() for _ in range(10)]
-#     assert len(set(values)) == 10
-#     assert set(values) == set(["R" + x for x in string.digits])
-#     with raises(ValueError):
-#         dist.draw()
-#     dist.draw_reset()
-#     dist.draw()
 
 
 # @mark.parametrize(
@@ -114,5 +85,3 @@ def test_regex_single_digit():
 #     assert isinstance(new_dist, dist_class)
 #     assert new_dist.min_digit == dist.re_list[0].min_digit
 #     assert new_dist.max_digit == dist.re_list[0].max_digit
-
-
