@@ -267,10 +267,6 @@ class LiteralRegex(BaseRegex):
     def __repr__(self):
         return f"Literal [{self.base_regex}]"
 
-    @property
-    def regex(self):
-        return r"[" + self.base_regex + r"]"
-
     def draw_once(self):
         return np.random.choice(self.literals)
 
@@ -355,12 +351,6 @@ class OrRegex(CharClassRegex):
     def base_regex(self):
         """Base regex for all subregexes."""
         return "".join(rc.base_regex for rc in self._regex_instances)
-
-    @property
-    def regex(self):
-        if self.min_len == 1 and self.max_len == 1:
-            return r"[" + self.base_regex + r"]"
-        return r"[" + self.base_regex + r"]{" + str(self.min_len) + "," + str(self.max_len) + "}"
 
     @property
     def n_param(self) -> int:
