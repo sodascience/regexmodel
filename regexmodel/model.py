@@ -52,7 +52,6 @@ def fit_main_branch(series: pl.Series,
     -------
         Edge that has the finite automata, and can draw new values.
     """
-
     # Use the returnnode/edge for returning
     return_node = OrNode([], Edge(None, 0))
 
@@ -157,6 +156,8 @@ class RegexModel():
             Sequence of values to fit the model on.
         count_thres:
             Only consider branches with (approximately) count_thres strings associated with it.
+        method:
+            Method to use for fitting the regex model. Use ["accurate", "fast"].
 
         Returns
         -------

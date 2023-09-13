@@ -10,6 +10,7 @@ from regexmodel.regexclass import BaseRegex, OrRegex
 
 class BaseNode(ABC):
     """Base class for nodes that are used in the finite automata."""
+
     def __init__(self, next_edge: Edge):
         self.next = next_edge
         assert isinstance(self.next, Edge)
@@ -56,6 +57,7 @@ class RegexNode(BaseNode):
     next_edge:
         Edge to the next node.
     """
+
     def __init__(self, regex: BaseRegex, next_edge: Edge):
         self._regex = regex
         self.next = next_edge
@@ -116,7 +118,7 @@ class OrNode(BaseNode):
 
         Arguments
         ---------
-        edge:
+        new_edge:
             Edge to be added.
         """
         self._count += new_edge.count
@@ -170,6 +172,7 @@ class Edge():
     count:
         Weight of the edge.
     """
+
     def __init__(self, destination: Optional[BaseNode],
                  count: Optional[int] = None):
         if count is None:
@@ -216,8 +219,7 @@ class Edge():
 
     @property
     def count_list(self) -> list:
-        """Get a list of the weights for each of the regex nodes.
-        """
+        """Get a list of the weights for each of the regex nodes."""
         if self.destination is None:
             return [self.count]
         if isinstance(self.destination, OrNode):

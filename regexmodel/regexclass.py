@@ -339,6 +339,7 @@ class OrRegex(CharClassRegex):
     max_len:
         Maximum number of repeats.
     """
+
     def __init__(self, regex_instances: list[BaseRegex], min_len: int = 1, max_len: int = 1):
         self._regex_instances = list(regex_instances)
         super().__init__(min_len, max_len)
@@ -385,8 +386,7 @@ class OrRegex(CharClassRegex):
         return self._regex_instances[0]
 
     def check_compatibility(self, series: pl.Series, count_thres: int) -> bool:
-        """Check whether the regex elements are compatible with each other.
-        """
+        """Check whether the regex elements are compatible with each other."""
         if len(self._regex_instances) == 1:
             return True
         base_regex = self._regex_instances[0]
@@ -500,7 +500,6 @@ def fit_best_regex_class(series: pl.Series, count_thres: int,
         Dictionary containing the score/regex/series if regex is used and
         series for all values that haven't used the regex.
     """
-
     # Get a ranking for all regex possibilities
     class_stat = get_class_stat(series, count_thres)
     if len(class_stat) == 0:
