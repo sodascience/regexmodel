@@ -9,7 +9,6 @@ import polars as pl
 from regexmodel.regexclass import fit_best_regex_class
 from regexmodel.util import sum_log, LOG_LIKE_PER_CHAR, NotFittedError
 from regexmodel.datastructure import Edge, OrNode, RegexNode
-# from regexmodel.model import fit_main_branch
 
 
 def _preview(series, size=3):
