@@ -38,9 +38,7 @@ jobs:
     - name: Lint with ruff
       run: |
         ruff regexmodel
-    # - name: Check pep8 with flake8
-      # run: |
-        # flake8 regexmodel --max-line-length 100
+
     - name: Lint with pylint
       run: |
         pylint regexmodel

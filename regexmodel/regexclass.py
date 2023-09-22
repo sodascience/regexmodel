@@ -25,8 +25,6 @@ class BaseRegex(ABC):
         Maximum length of the number of repeating elements.
     """
 
-    n_possible = 1
-
     def __init__(self, min_len: int = 1, max_len: int = 1):
         self.min_len = min_len
         self.max_len = max_len
@@ -49,13 +47,34 @@ class BaseRegex(ABC):
     @property
     @abstractmethod
     def base_regex(self) -> str:
-        pass
+        """Base regex that returns the part inside the brackets.
+
+        For example 'A-Z' in the case of an uppercase regex.
+        """
 
     @classmethod
     @abstractmethod
     def get_candidates(cls, series: pl.Series, count_thres: int
                        ) -> Iterable[tuple[BaseRegex, float, pl.Series]]:
-        pass
+        """Return a list of candidate regexes for a given series.
+
+        Parameters
+        ----------
+        series:
+            Series to create the candidates for.
+        count_thres:
+            Threshold for creating candidates. No candidates will be created that
+            have fewer matches with the series than this.
+
+        Returns
+        -------
+        regex:
+            Regex that matches the start of the series
+        score:
+            How well the regex matches the series.
+        next_series:
+            What is left after matching the series with the regex.
+        """
 
     @staticmethod
     def get_class_length(regex_str: str):
@@ -132,8 +151,14 @@ class BaseRegex(ABC):
                 yield (value[i_len:], self._draw_probability(i_len))
 
     @property
-    def n_possible_div(self):
+    def n_possible_div(self) -> float:
+        """Used to score the match."""
         return self.n_possible
+
+    @property
+    @abstractmethod
+    def n_possible(self) -> int:
+        """Get the number of possibilities of this regex."""
 
 
 class CharRangeRegex(BaseRegex, ABC):
@@ -215,7 +240,7 @@ class CharRangeRegex(BaseRegex, ABC):
             ret = cls.from_string(f"{start_char}-{end_char}")
             assert ret is not None
             regex = ret[0]
-            score_sub, next_series_sub, first_char_sub = score(series, regex, count_thres)
+            score_sub, next_series_sub, _first_char_sub = score(series, regex, count_thres)
         else:
             score_sub = 0
             regex = cls()
@@ -227,7 +252,45 @@ class CharRangeRegex(BaseRegex, ABC):
             yield (regex, score_sub, next_series_sub)
 
 
-def score(series, regex, count_thres, first_char: Optional[pl.Series] = None):
+def score(series: pl.Series, regex: BaseRegex, count_thres: int,
+          first_char: Optional[pl.Series] = None
+          ) -> tuple[float, pl.Series, pl.Series]:
+    """Compute the score of matching the regex.
+
+    This attempts to create a universal measure of how good the regex fits the
+    series. It consists of:
+    - split_penalty: Some values in the series will not be match, and if this
+        happens too often, no match will ever be found. This attempts to take this
+        into account and will be lower if there is a higher likelihood of failing the
+        to fit.
+    - fraction_used: For character classes, there are characters that are not matched.
+        for example: [A-Z], but B is not the start of any of the series. In this case,
+        there is a penalty for that.
+    - n_not_null: Number of values in the series that are matched. The higher the better.
+
+    The score is then the product of all those values. It is normalized by the length of
+    the series to keep it < 1.
+
+    Parameters
+    ----------
+    series:
+        Series to be matched.
+    regex:
+        Regex that will match the series.
+    count_thres:
+        Threshold for allowing regexes to be used.
+    first_char:
+        Hack that is used to keep it from being recomputed in the case of the LiteralRegex.
+
+    Returns
+    -------
+    score:
+        Score that measures the goodness of fit.
+    next_series:
+        Series that is left over after matching the regex.
+    first_char:
+        Extracted match from the regex.
+    """
     if first_char is None:
         first_char = series.str.extract(r"^([" + regex.base_regex + r"])[\S\s]*$")
     next_series = series.str.extract(r"^[" + regex.base_regex + r"]([\S\s]*)$")
@@ -238,7 +301,8 @@ def score(series, regex, count_thres, first_char: Optional[pl.Series] = None):
         n_unique = len(first_char.drop_nulls().unique())
     avg_len_next = next_series.drop_nulls().str.lengths().mean()
     avg_len_cur = series.filter(next_series.is_not_null()).drop_nulls().str.lengths().mean()
-    if avg_len_cur == avg_len_next or n_not_null == 0 or n_not_null < count_thres:
+    if (avg_len_cur == avg_len_next or n_not_null == 0 or n_not_null < count_thres
+            or avg_len_cur is None or avg_len_next is None):
         return 0, next_series, first_char
     fraction_not_null = (len(series)-next_series.null_count())/(len(series)-series.null_count())
     n_lengths_left = avg_len_cur/(avg_len_cur-avg_len_next) - 1
