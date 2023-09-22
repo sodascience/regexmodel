@@ -204,12 +204,13 @@ class CharRangeRegex(BaseRegex, ABC):
             n_not_null = len(series) - next_series_sub.null_count()
             n_unique = len(first_char_sub.drop_nulls().unique())
             avg_len = next_series_sub.drop_nulls().str.lengths().mean()
-            fraction_used = n_unique/(regex.n_possible+2)
+            fraction_used = n_unique/(1.5*(regex.n_possible+2))
             score_sub = score(n_not_null, count_thres, fraction_used, avg_len, len(series))
         else:
             score_sub = 0
             regex = cls()
 
+        print(score_full, score_sub, regex)
         if score_full >= score_sub:
             if score_full > 0:
                 yield (cls(), score_full, next_series_full)
@@ -217,14 +218,28 @@ class CharRangeRegex(BaseRegex, ABC):
             yield (regex, score_sub, next_series_sub)
 
 
-def score(n_not_null, count_thres, fraction_used, avg_len, series_len):
+def score(series, regex, count_thres):
+    first_char = series.str.extract(r"^([" + regex.base_regex + r"])[\S\s]*$")
+    next_series = series.str.extract(r"^[" + regex.base_regex + r"]([\S\s]*)$")
+    n_not_null = len(series) - next_series.null_count()
+    n_unique = len(first_char.drop_nulls().unique())
+    avg_len_next = next_series.drop_nulls().str.lengths().mean()
+    avg_len_cur = series.drop_nulls().str.lengts().mean()
+    if avg_len_cur == avg_len_next:
+        return 0, next_series, first_char
+    frac
+    n_lengths_left = avg_len_cur/(avg_len_cur-avg_len_next) - 1
+    fraction_used = n_unique/(1.4*regex.n_possible)
+
+# def score(n_not_null, count_thres, fraction_used, fraction_null, n_lengths_left, series_len):
     if n_not_null < count_thres:
         return 0
-    if avg_len is None:
+    if n_lengths_left is None:
         split_penalty = 1
     else:
-        expected_finish = 0.7**avg_len*n_not_null
+        expected_finish = fraction_not_null**n_lengths_left*n_not_null
         split_penalty = 1/(1 + np.exp(2*(count_thres - expected_finish)/count_thres))
+    print("split", split_penalty, expected_finish)
     return split_penalty*fraction_used*n_not_null/series_len
 
 
