@@ -8,7 +8,8 @@ import sys
 
 from faker import Faker
 
-from regexmodel.model import RegexModel
+from regexmodel.model import RegexModel, NotFittedError
+from regexmodel.util import LOG_LIKE_PER_CHAR
 
 
 def run_bench(faker_type, count_thres, n_fake, locale="NL", method="accurate"):
@@ -21,9 +22,20 @@ def run_bench(faker_type, count_thres, n_fake, locale="NL", method="accurate"):
     for cur_n_fake in n_fake:
         for cur_count_thres in count_thres:
             start_time = time.time()
-            model = RegexModel.fit(fake_data[:cur_n_fake], cur_count_thres, method=method)
-            mid_time = time.time()
-            stats = model.fit_statistics(fake_data_2[:cur_n_fake])
+            try:
+                model = RegexModel.fit(fake_data[:cur_n_fake], cur_count_thres, method=method)
+                mid_time = time.time()
+                stats = model.fit_statistics(fake_data_2[:cur_n_fake])
+            except NotFittedError:
+                stats = {
+                    "failed": cur_n_fake,
+                    "success": 0,
+                    "n_tot_char": len("".join(fake_data_2[:cur_n_fake])),
+                    "n_char_success": 0,
+                    "n_parameters": 0,
+                    "avg_log_like_per_char": LOG_LIKE_PER_CHAR,
+                    "avg_log_like_pc_success": LOG_LIKE_PER_CHAR,
+                }
             end_time = time.time()
             success_rate = stats["success"]/(stats["success"] + stats["failed"])
             stats.update({"n_fake": cur_n_fake, "threshold": cur_count_thres,
