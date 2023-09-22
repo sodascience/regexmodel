@@ -336,16 +336,6 @@ class LiteralRegex(BaseRegex):
         for cur_char in thres_char:
             cur_score, next_series, _first_char = score(series, cls([cur_char]), count_thres,
                                                         first_char=first_elem)
-            # next_series = series.str.extract(r"^" + cls(cur_char).regex + r"([\S\s]*)")
-            # avg_len = next_series.drop_nulls().str.lengths().mean()
-
-            # n_not_null = len(series) - next_series.null_count()
-            # avg_len = next_series.drop_nulls().str.lengths().mean()
-            # if avg_len is None:
-                # split_penalty = 1
-            # else:
-                # expected_finish = 0.7**avg_len*n_not_null
-                # split_penalty = 1/(1 + np.exp(2*(count_thres - expected_finish)/count_thres))
             yield (cls(cur_char), cur_score, next_series)
 
     def __repr__(self):
