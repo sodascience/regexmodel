@@ -35,7 +35,7 @@ GitHub = "https://github.com/sodascience/regexmodel"
 
 [project.optional-dependencies]
 test = [
-    "pytest", "pylint", "pydocstyle", "mypy", "flake8", "nbval",
+    "pytest", "pylint", "pydocstyle", "mypy", "ruff", "nbval",
 #    "sphinx<7.0.0", "sphinx-rtd-theme", "sphinxcontrib-napoleon", 
 #    "sphinx-autodoc-typehints", "sphinx_inline_tabs", "sphinx_copybutton",
 #    "XlsxWriter"
@@ -59,6 +59,10 @@ ignore-patterns="_version.py"
 max-line-length=100
 max-locals=35
 max-args=10
+
+[tool.ruff]
+exclude = ["regexmodel/_version.py"]
+line-length=100
 
 [[tool.mypy.overrides]]
 module = [
