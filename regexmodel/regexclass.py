@@ -152,7 +152,13 @@ class BaseRegex(ABC):
 
     @property
     def n_possible_div(self) -> float:
-        """Used to score the match."""
+        """Used to score the match.
+
+        It is equivalent to the number of possibilties, but with modifiers.
+        This is used in the character ranges, where the range is not maximal
+        to give them a lower score. Thus, [A-Z] has generally a higher score than
+        [A-Y], even if there is no Z present in the dataset.
+        """
         return self.n_possible
 
     @property
@@ -194,7 +200,6 @@ class CharRangeRegex(BaseRegex, ABC):
     @property
     def n_possible_div(self) -> float:
         if self.char_range == self.all_possible:
-            # print(self.char_range, self.all_possible)
             return self.n_possible
         return self.n_possible*1.3
 
@@ -322,8 +327,6 @@ class UpperRegex(CharRangeRegex):
     """Regex class that produces upper case characters."""
 
     _base_regex = r"A-Z"
-    # prefac = 0.25
-    # n_possible = 26
     all_possible = string.ascii_uppercase
 
 
@@ -331,8 +334,6 @@ class LowerRegex(CharRangeRegex):
     """Regex class that produces lower case characters."""
 
     _base_regex = r"a-z"
-    # prefac = 0.25
-    # n_possible = 26
     all_possible = string.ascii_lowercase
 
 
@@ -340,8 +341,6 @@ class DigitRegex(CharRangeRegex):
     """Regex class that produces digits."""
 
     _base_regex = r"0-9"
-    # prefac = 0.5
-    # n_possible = 10
     all_possible = string.digits
 
 
@@ -574,6 +573,7 @@ def regex_list_from_string(regex_str) -> list[BaseRegex]:
     """
     cur_data = regex_str
     all_regexes = []
+
     # loop until we have parsed the whole string.
     while len(cur_data) > 0:
         found = False
