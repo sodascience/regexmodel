@@ -151,7 +151,7 @@ class BaseRegex(ABC):
                 yield (value[i_len:], self._draw_probability(i_len))
 
     @property
-    def n_possible_div(self) -> float:
+    def subrange_penalty(self) -> float:
         """Used to score the match.
 
         It is equivalent to the number of possibilties, but with modifiers.
@@ -159,7 +159,7 @@ class BaseRegex(ABC):
         to give them a lower score. Thus, [A-Z] has generally a higher score than
         [A-Y], even if there is no Z present in the dataset.
         """
-        return self.n_possible
+        return 1
 
     @property
     @abstractmethod
@@ -198,10 +198,10 @@ class CharRangeRegex(BaseRegex, ABC):
         return random.choice(self.char_range)
 
     @property
-    def n_possible_div(self) -> float:
+    def subrange_penalty(self) -> float:
         if self.char_range == self.all_possible:
-            return self.n_possible
-        return self.n_possible*1.3
+            return super().subrange_penalty
+        return 0.75
 
     def covers(self, regex: BaseRegex) -> bool:
         if isinstance(regex, LiteralRegex):
@@ -299,27 +299,21 @@ def score(series: pl.Series, regex: BaseRegex, count_thres: int,
     if first_char is None:
         first_char = series.str.extract(r"^([" + regex.base_regex + r"])[\S\s]*$")
     next_series = series.str.extract(r"^[" + regex.base_regex + r"]([\S\s]*)$")
-    n_not_null = len(series) - next_series.null_count()
+    next_not_null = len(series) - next_series.null_count()
+    cur_not_null = len(series) - series.null_count()
     if isinstance(regex, LiteralRegex):
         n_unique = regex.n_possible
     else:
         n_unique = len(first_char.drop_nulls().unique())
     avg_len_next = next_series.drop_nulls().str.lengths().mean()
-    avg_len_cur = series.filter(next_series.is_not_null()).drop_nulls().str.lengths().mean()
-    if (avg_len_cur == avg_len_next or n_not_null == 0 or n_not_null < count_thres
-            or avg_len_cur is None or avg_len_next is None):
+    if (next_not_null == 0 or next_not_null < count_thres or avg_len_next is None):
         return 0, next_series, first_char
-    fraction_not_null = (len(series)-next_series.null_count())/(len(series)-series.null_count())
-    n_lengths_left = avg_len_cur/(avg_len_cur-avg_len_next) - 1
-    fraction_used = n_unique/regex.n_possible_div
+    fraction_not_null = next_not_null/cur_not_null
+    fraction_used = n_unique/regex.n_possible
 
-    if n_lengths_left is None:
-        split_penalty = 1
-    else:
-        expected_finish = fraction_not_null**n_lengths_left*n_not_null
-        log_finish = np.log(expected_finish/count_thres)
-        split_penalty = 1/(1 + np.exp(-log_finish))
-    cur_score = split_penalty*fraction_used*n_not_null/len(series)
+    expected_finish = fraction_not_null**avg_len_next*next_not_null
+    split_penalty = 1/(1 + count_thres/expected_finish)
+    cur_score = regex.subrange_penalty*split_penalty*fraction_used*next_not_null/cur_not_null
     return cur_score, next_series, first_char
 
 
