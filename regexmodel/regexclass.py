@@ -268,10 +268,12 @@ def score(series: pl.Series, regex: BaseRegex, count_thres: int,
         happens too often, no match will ever be found. This attempts to take this
         into account and will be lower if there is a higher likelihood of failing the
         to fit.
-    - fraction_used: For character classes, there are characters that are not matched.
+    - fraction_cover: For character classes, there are characters that are not matched.
         for example: [A-Z], but B is not the start of any of the series. In this case,
         there is a penalty for that.
-    - n_not_null: Number of values in the series that are matched. The higher the better.
+    - fraction_match: Fraction of values matched. The higher the better.
+    - subrange_penalty: Penalty for using subranges. We prefer [A-Z] over [A-Y] generally,
+        even if Z is not present in the samples.
 
     The score is then the product of all those values. It is normalized by the length of
     the series to keep it < 1.
@@ -308,12 +310,12 @@ def score(series: pl.Series, regex: BaseRegex, count_thres: int,
     avg_len_next = next_series.drop_nulls().str.lengths().mean()
     if (next_not_null == 0 or next_not_null < count_thres or avg_len_next is None):
         return 0, next_series, first_char
-    fraction_not_null = next_not_null/cur_not_null
-    fraction_used = n_unique/regex.n_possible
+    fraction_match = next_not_null/cur_not_null
+    fraction_cover = n_unique/regex.n_possible
 
-    expected_finish = fraction_not_null**avg_len_next*next_not_null
+    expected_finish = fraction_match**avg_len_next*next_not_null
     split_penalty = 1/(1 + count_thres/expected_finish)
-    cur_score = regex.subrange_penalty*split_penalty*fraction_used*next_not_null/cur_not_null
+    cur_score = regex.subrange_penalty*split_penalty*fraction_cover*fraction_match
     return cur_score, next_series, first_char
 
 
