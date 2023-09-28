@@ -4,7 +4,7 @@ from regexmodel import RegexModel
 
 
 @mark.parametrize("series,regex,counts", [
-        (["R123", "R837", "R354", "R456", "R578", "R699"], r"R[0-9]{3,3}",
+        (["R123", "R837", "R354", "R456", "R578", "R699"], r"R[0-9]{3}",
             [6, 6, 6]),
         (["A123", "B123", "C123", "D123", "E123", "F123"], r"[A-F]123",
             [6, 6, 6, 6, 6]),

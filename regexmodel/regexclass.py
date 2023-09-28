@@ -83,7 +83,11 @@ class BaseRegex(ABC):
         if res is None:  # should never fire.
             raise ValueError("Cannot get class length.")
         if res.groups()[0] is None:
-            return (1, 1), regex_str
+            res = re.search(r"^{(\d+)}", regex_str)
+            if res is None:
+                return (1, 1), regex_str
+            all_len = res.groups()[0]
+            return (int(all_len), int(all_len)), regex_str[len(all_len)+2:]
         regex_len = len("".join(res.groups())) + 3
         return (int(x) for x in res.groups()), regex_str[regex_len:]
 
@@ -102,6 +106,8 @@ class BaseRegex(ABC):
 
         if self.min_len == 1 and self.max_len == 1:
             return regex_start
+        if self.min_len == self.max_len:
+            return regex_start + r"{" + f"{self.min_len}" + r"}"
         return regex_start + r"{" + f"{self.min_len},{self.max_len}" + "}"
 
     @abstractmethod
