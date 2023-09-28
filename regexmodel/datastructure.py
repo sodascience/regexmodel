@@ -230,7 +230,7 @@ class Edge():
         raise ValueError("Internal Error")
 
     @classmethod
-    def from_string(cls, regex_str) -> tuple[Edge, str]:
+    def from_string(cls, regex_str) -> tuple[Edge, str]:  # pylint: disable=too-many-return-statements
         """Create edges and nodes from a regex.
 
         This method parses a regex from left to right.
@@ -244,9 +244,14 @@ class Edge():
         if len(regex_str) == 0:
             return cls(None, 1), ""
 
+        new_regex: BaseRegex
+
         # Start of a regex class.
         if regex_str[0] == "[":
-            new_regex, cur_regex_str = OrRegex.from_string(regex_str)
+            res = OrRegex.from_string(regex_str)
+            if res is None:
+                raise ValueError(f"Malformed regex class, left with '{regex_str}'")
+            new_regex, cur_regex_str = res
             new_edge, new_str = cls.from_string(cur_regex_str)
             return cls(RegexNode(new_regex, new_edge), 1), new_str
 
@@ -276,9 +281,9 @@ class Edge():
             new_edge, new_str = cls.from_string(cur_regex_str)
             return cls(RegexNode(new_regex, new_edge), 1), new_str
 
-        res = LiteralRegex.from_string(regex_str)
-        if res is not None:
-            new_regex, cur_regex_str = res
+        lit_res = LiteralRegex.from_string(regex_str)
+        if lit_res is not None:
+            new_regex, cur_regex_str = lit_res
             (min_len, max_len), cur_regex_str = LiteralRegex.get_class_length(cur_regex_str)
             new_regex.min_len = min_len
             new_regex.max_len = max_len
