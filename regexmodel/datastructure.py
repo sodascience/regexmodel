@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Iterable, Optional, Union
 
 import numpy as np
-from regexmodel.regexclass import BaseRegex, OrRegex
+from regexmodel.regexclass import BaseRegex, OrRegex, DigitRegex, LiteralRegex
 
 
 class BaseNode(ABC):
@@ -250,7 +250,7 @@ class Edge():
             new_edge, new_str = cls.from_string(cur_regex_str)
             return cls(RegexNode(new_regex, new_edge), 1), new_str
 
-        # Start of an OrRegex construction.
+        # Start of an OrNode construction.
         if regex_str[0] == "(":
             all_edges = []
             cur_regex_str = regex_str[1:]
@@ -266,9 +266,25 @@ class Edge():
         if regex_str[0] == "|":
             return cls(None, 1), regex_str[1:]
 
-        # End of the OrRegex construction
+        # End of the OrNode construction
         if regex_str[0] == ")":
             return cls(None, 1), regex_str
+
+        if len(regex_str) >= 2 and regex_str[:2] == r"\d":
+            (min_len, max_len), cur_regex_str = DigitRegex.get_class_length(regex_str[2:])
+            new_regex = DigitRegex(min_len, max_len)
+            new_edge, new_str = cls.from_string(cur_regex_str)
+            return cls(RegexNode(new_regex, new_edge), 1), new_str
+
+        res = LiteralRegex.from_string(regex_str)
+        if res is not None:
+            new_regex, cur_regex_str = res
+            (min_len, max_len), cur_regex_str = LiteralRegex.get_class_length(cur_regex_str)
+            new_regex.min_len = min_len
+            new_regex.max_len = max_len
+            new_edge, new_str = cls.from_string(cur_regex_str)
+            return cls(RegexNode(new_regex, new_edge), 1), new_str
+
         raise ValueError(f"Failed parsing regex: currently still have: {regex_str}")
 
     def set_counts(self, counts: Union[int, list]):
