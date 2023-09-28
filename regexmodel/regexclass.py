@@ -83,7 +83,11 @@ class BaseRegex(ABC):
         if res is None:  # should never fire.
             raise ValueError("Cannot get class length.")
         if res.groups()[0] is None:
-            return (1, 1), regex_str
+            res = re.search(r"^{(\d+)}", regex_str)
+            if res is None:
+                return (1, 1), regex_str
+            all_len = res.groups()[0]
+            return (int(all_len), int(all_len)), regex_str[len(all_len)+2:]
         regex_len = len("".join(res.groups())) + 3
         return (int(x) for x in res.groups()), regex_str[regex_len:]
 
@@ -95,9 +99,16 @@ class BaseRegex(ABC):
     @property
     def regex(self):
         """Regex for retrieving elements with the regex class."""
+        if isinstance(self, LiteralRegex):
+            regex_start = self.base_regex
+        else:
+            regex_start = r"[" + self.base_regex + r"]"
+
         if self.min_len == 1 and self.max_len == 1:
-            return r"[" + self.base_regex + r"]"
-        return r"[" + self.base_regex + r"]{" + f"{self.min_len},{self.max_len}" + "}"
+            return regex_start
+        if self.min_len == self.max_len:
+            return regex_start + r"{" + f"{self.min_len}" + r"}"
+        return regex_start + r"{" + f"{self.min_len},{self.max_len}" + "}"
 
     @abstractmethod
     def covers(self, regex: BaseRegex) -> bool:
@@ -405,9 +416,11 @@ class LiteralRegex(BaseRegex):
 
     @classmethod
     def from_string(cls, regex_str) -> Optional[tuple[BaseRegex, str]]:
-        if len(regex_str) > 1 and regex_str[0] == "\\":
+        _special_chars = [".", "+", "*", "?", "^", "$", "(", ")", "[", "]",
+                          "{", "}", "|", "\\"]
+        if len(regex_str) > 1 and regex_str[0] == "\\" and regex_str[1] in _special_chars:
             return cls([_unescape(regex_str[1])]), regex_str[2:]
-        if len(regex_str) >= 1 and regex_str[0] != "\\":
+        if len(regex_str) >= 1 and regex_str[0] != "\\" and regex_str[0] not in _special_chars:
             return cls([_unescape(regex_str[0])]), regex_str[1:]
         return None
 
@@ -530,9 +543,12 @@ class OrRegex(CharRangeRegex):
         return True
 
     @classmethod
-    def from_string(cls, regex_str):
+    def from_string(cls, regex_str) -> Optional[tuple[OrRegex, str]]:
         rex = r"^\[([\S\s]*?[^\\])\]"
-        options = re.search(rex, regex_str).group(1)
+        match = re.search(rex, regex_str)
+        if match is None:
+            return None
+        options = match.group(1)
         new_regex_str = regex_str[len(options)+2:]
         inner_str = _unescape(options)
         all_regex = []
@@ -553,36 +569,6 @@ class OrRegex(CharRangeRegex):
 
 # All regex classes available, order matters.
 ALL_REGEX_CLASS: list[type[BaseRegex]] = [UpperRegex, LowerRegex, DigitRegex, LiteralRegex]
-
-
-def regex_list_from_string(regex_str) -> list[BaseRegex]:
-    """Convert a regex string to a list of regex classes.
-
-    Parameters
-    ----------
-    regex_str:
-        String representation of the regex list, e.g. r'[0-9]{3,4}[A-Z]'
-
-    Returns
-    -------
-        List of regex classes represented by the regex string.
-    """
-    cur_data = regex_str
-    all_regexes = []
-
-    # loop until we have parsed the whole string.
-    while len(cur_data) > 0:
-        found = False
-        for regex_class in ALL_REGEX_CLASS:
-            res = regex_class.from_string(cur_data)
-            if res is not None:
-                found = True
-                all_regexes.append(res[0])
-                cur_data = res[1]
-                break
-        if not found:
-            raise ValueError(f"Invalid regex: '{regex_str}', at '{cur_data}'")
-    return all_regexes
 
 
 def _preview(series):
