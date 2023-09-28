@@ -230,8 +230,8 @@ class Edge():
         raise ValueError("Internal Error")
 
     @classmethod
-    def from_string(cls, regex_str
-                    ) -> tuple[Edge, str]:  # pylint: disable=too-many-return-statements
+    def from_string(cls,  # pylint: disable=too-many-return-statements
+                    regex_str) -> tuple[Edge, str]:
         """Create edges and nodes from a regex.
 
         This method parses a regex from left to right.
