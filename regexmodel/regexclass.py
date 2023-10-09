@@ -418,7 +418,7 @@ class LiteralRegex(BaseRegex):
     @classmethod
     def from_string(cls, regex_str) -> Optional[tuple[BaseRegex, str]]:
         _special_chars = [".", "+", "*", "?", "^", "$", "(", ")", "[", "]",
-                          "{", "}", "|", "\\"]
+                          "{", "}", "|", "\\", "-"]
         if len(regex_str) > 1 and regex_str[0] == "\\" and regex_str[1] in _special_chars:
             return cls([_unescape(regex_str[1])]), regex_str[2:]
         if len(regex_str) >= 1 and regex_str[0] != "\\" and regex_str[0] not in _special_chars:
