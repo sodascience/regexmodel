@@ -259,22 +259,20 @@ class Edge():
         # Start of an OrNode construction.
         if regex_str[0] == "(":
             all_edges = []
-            cur_regex_str = regex_str[1:]
-            while cur_regex_str[0] != ")":
-                # print("1", cur_regex_str)
-                new_edge, cur_regex_str = cls.from_string(cur_regex_str)
-                # print("2", cur_regex_str)
-                all_edges.append(new_edge)
+            cur_regex_str = regex_str
+            while True:
+                next_edge, cur_regex_str = cls.from_string(cur_regex_str[1:])
+                all_edges.append(next_edge)
                 if len(cur_regex_str) == 0:
                     raise ValueError("Unterminated ')' in regex.")
+                if cur_regex_str[0] == ")":
+                    break
             next_edge, next_str = cls.from_string(cur_regex_str[1:])
-            # print(all_edges, next_edge)
             return cls(OrNode(all_edges, next_edge), 1), next_str
 
         # Continue with another branch of the OrRegex construction
         if regex_str[0] == "|":
-            # print("Found or statement", regex_str)
-            return cls(None, 1), regex_str[1:]
+            return cls(None, 1), regex_str
 
         # End of the OrNode construction
         if regex_str[0] == ")":
@@ -293,7 +291,6 @@ class Edge():
             new_regex.min_len = min_len
             new_regex.max_len = max_len
             new_edge, new_str = cls.from_string(cur_regex_str)
-            # print("Literal", lit_res, new_str)
 
             return cls(RegexNode(new_regex, new_edge), 1), new_str
 

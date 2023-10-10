@@ -88,8 +88,8 @@
                   
 
                   // parsing and collecting nodes and edges from the python
-                  nodes = new vis.DataSet([{"group": 2, "id": 0, "label": "start", "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 1, "label": "[0-9]", "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 2, "label": 2, "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 3, "label": "a", "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 5, "label": "[A-Z]{3,6}", "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 4, "label": "b", "shape": "dot", "size": 10}]);
-                  edges = new vis.DataSet([{"arrows": "to", "from": 0, "to": 1, "width": 1}, {"arrows": "to", "from": 1, "to": 2, "width": 1}, {"arrows": "to", "from": 2, "to": 3, "width": 1}, {"arrows": "to", "from": 2, "to": 5, "width": 1}, {"arrows": "to", "from": 3, "to": 4, "width": 1}, {"arrows": "to", "from": 4, "to": 5, "width": 1}]);
+                  nodes = new vis.DataSet([{"group": 2, "id": 0, "label": "start", "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 1, "label": "[0-9]", "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 2, "label": 2, "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 3, "label": "a", "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 4, "label": "a", "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 6, "label": "[A-Z]{3,6}", "shape": "dot", "size": 10}, {"color": "#97c2fc", "id": 5, "label": "b", "shape": "dot", "size": 10}]);
+                  edges = new vis.DataSet([{"arrows": "to", "from": 0, "to": 1, "width": 1}, {"arrows": "to", "from": 1, "to": 2, "width": 1}, {"arrows": "to", "from": 2, "to": 3, "width": 1}, {"arrows": "to", "from": 2, "to": 4, "width": 1}, {"arrows": "to", "from": 2, "to": 6, "width": 1}, {"arrows": "to", "from": 3, "to": 6, "width": 1}, {"arrows": "to", "from": 4, "to": 5, "width": 1}, {"arrows": "to", "from": 5, "to": 6, "width": 1}]);
 
                   nodeColors = {};
                   allNodes = nodes.get({ returnType: "Object" });
