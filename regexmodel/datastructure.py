@@ -291,7 +291,6 @@ class Edge():
             new_regex.min_len = min_len
             new_regex.max_len = max_len
             new_edge, new_str = cls.from_string(cur_regex_str)
-
             return cls(RegexNode(new_regex, new_edge), 1), new_str
 
         raise ValueError(f"Failed parsing regex: currently still have: {regex_str}")
