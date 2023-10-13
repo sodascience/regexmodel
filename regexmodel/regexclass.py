@@ -318,7 +318,7 @@ def score(series: pl.Series, regex: BaseRegex, count_thres: int,
         n_unique = regex.n_possible
     else:
         n_unique = len(first_char.drop_nulls().unique())
-    avg_len_next = next_series.drop_nulls().str.lengths().mean()
+    avg_len_next = next_series.drop_nulls().str.len_chars().mean()
     if (next_not_null == 0 or next_not_null < count_thres or avg_len_next is None):
         return 0, next_series, first_char
     fraction_match = next_not_null/cur_not_null
