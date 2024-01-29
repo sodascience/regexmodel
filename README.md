@@ -70,3 +70,23 @@ And deserialized:
 with open(some_file, "r") as handle:
     model = RegexModel(json.load(handle))
 ```
+
+
+<!-- CONTRIBUTING -->
+## Contributing
+You can contribute to this template by giving feedback in the "Issues" tab, or by creating a pull request.
+
+To create a pull request:
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+
+<!-- CONTACT -->
+## Contact
+**Metasyn** is a project by the [ODISSEI Social Data Science (SoDa)](https://odissei-data.nl/nl/soda/) team.
+Do you have questions, suggestions, or remarks on the technical implementation? File an issue in the issue tracker or feel free to contact [Raoul Schram](https://github.com/qubixes).
+
+<img src="soda.png" alt="SoDa logo" width="250px"/> 
