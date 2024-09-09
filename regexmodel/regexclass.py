@@ -325,7 +325,7 @@ def score(series: pl.Series, regex: BaseRegex, count_thres: int,
     fraction_match = next_not_null/cur_not_null
     fraction_cover = n_unique/regex.n_possible
 
-    expected_finish = fraction_match**avg_len_next*next_not_null
+    expected_finish = fraction_match**avg_len_next*next_not_null  # type: ignore
     expected_finish = max(1e-12, expected_finish)
     split_penalty = 1/(1 + count_thres/expected_finish)
     cur_score = regex.subrange_penalty*split_penalty*fraction_cover*fraction_match
