@@ -260,6 +260,7 @@ class CharRangeRegex(BaseRegex, ABC):
         else:
             score_sub = 0
             regex = cls()
+            next_series_sub = next_series_full
 
         if score_full >= score_sub:
             if score_full > 0:
