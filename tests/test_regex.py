@@ -1,4 +1,5 @@
 from pytest import mark
+import string
 
 from regexmodel import RegexModel
 
@@ -33,6 +34,10 @@ def test_full_pipeline(series, regex, counts):
     assert model.regex == new_model.regex
     assert new_model.serialize()["counts"] == model.serialize()["counts"]
 
+def test_all_chars():
+    model = RegexModel.fit(list(string.printable), count_thres=1)
+    new_model = RegexModel(model.serialize())
+    assert isinstance(new_model, RegexModel)
 
 
 # @mark.parametrize(
